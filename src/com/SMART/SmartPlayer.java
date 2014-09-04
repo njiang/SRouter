@@ -22,7 +22,7 @@ public class SmartPlayer {
     private int SMART_Server_Port = 7999;
     private String videoServerIP = "127.0.0.1";
     private String videoFileName = "2012.flv";
-    private String videoFilePath = "C:\\Users\\Ning Jiang\\Videos\\";
+    private String videoFilePath = "C:\\Temp\\";
 
     public SmartPlayer(String[] args) {
         if (args.length > 0) {

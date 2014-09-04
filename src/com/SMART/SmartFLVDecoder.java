@@ -20,7 +20,6 @@ package com.SMART;
  *******************************************************************************/
 
 
-import com.xuggle.ferry.IBuffer;
 import com.xuggle.xuggler.*;
 import com.xuggle.xuggler.demos.VideoImage;
 
@@ -141,7 +140,7 @@ public class SmartFLVDecoder
         //IPacket packet = IPacket.make();
         long firstTimestampInStream = Global.NO_PTS;
         long systemClockStartTime = 0;
-        int numBytes = -1;
+        int numBytes = 0;
         int count = 0;
         do
         {
@@ -150,13 +149,13 @@ public class SmartFLVDecoder
                 break;
             byte[] data = new byte[numBytes];
             socketInputStream.read(data, 0, numBytes);
-            IPacket packet = IPacket.make(IBuffer.make(null, data, 0, data.length));
-            System.out.println("Packet " + count + " Size: " + numBytes);
-            count++;
+            //IPacket packet = IPacket.make(IBuffer.make(null, data, 0, data.length));
+            //System.out.println("Packet " + count + " Size: " + numBytes);
+            //count++;
 
-            //IPacket packet0 = IPacket.make();
-            //if (container.readNextPacket(packet0) < 0)
-            //    break;
+            IPacket packet = IPacket.make();
+            if (container.readNextPacket(packet) < 0)
+                break;
             //packet = packet0;
       /*
        * Now we have a packet, let's see if it belongs to our video stream
@@ -278,7 +277,7 @@ public class SmartFLVDecoder
             }
 
         }
-        while (numBytes >= 0);
+        while (true);// (numBytes >= 0);
     /*
      * Technically since we're exiting anyway, these will be cleaned up by
      * the garbage collector... but because we're nice people and want

@@ -109,7 +109,7 @@ class TCPServer
 public class SmartServer {
     private TCPServer tcpServer;
     private int Server_Port = 7999;
-    private String rootFilePath = "c:\\Users\\Ning Jiang\\Videos\\";
+    private String rootFilePath = "c:\\Temp\\";
     public SmartServer(String[] args)
     {
        if (args.length > 0) {
