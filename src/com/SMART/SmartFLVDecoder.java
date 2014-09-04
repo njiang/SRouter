@@ -20,6 +20,7 @@ package com.SMART;
  *******************************************************************************/
 
 
+import com.xuggle.ferry.IBuffer;
 import com.xuggle.xuggler.*;
 import com.xuggle.xuggler.demos.VideoImage;
 
@@ -50,7 +51,7 @@ public class SmartFLVDecoder
      * @param clientSocket Must contain the socket that connects to the SMART router
      */
     @SuppressWarnings("deprecation")
-    public SmartFLVDecoder(Socket clientSocket, String filename)
+    public SmartFLVDecoder(Socket clientSocket, DataInputStream ins, String filename)
     {
         this.decodeFileName = filename;
         this.clientSocket = clientSocket;
@@ -65,7 +66,7 @@ public class SmartFLVDecoder
         // Create a Xuggler container object
         container = IContainer.make();
         try {
-            socketInputStream = new DataInputStream(clientSocket.getInputStream());
+            socketInputStream = ins; //new DataInputStream(clientSocket.getInputStream());
         }
         catch (Exception e) {
             System.out.println("Failed to create socket input stream " + e.getMessage());
@@ -142,20 +143,32 @@ public class SmartFLVDecoder
         long systemClockStartTime = 0;
         int numBytes = 0;
         int count = 0;
+        int bytesread = 0;
         do
         {
             numBytes = socketInputStream.readInt();
             if (numBytes < 0)
                 break;
             byte[] data = new byte[numBytes];
-            socketInputStream.read(data, 0, numBytes);
-            //IPacket packet = IPacket.make(IBuffer.make(null, data, 0, data.length));
-            //System.out.println("Packet " + count + " Size: " + numBytes);
-            //count++;
+            int remainingbytes = numBytes;
+            do {
+                bytesread = socketInputStream.read(data, numBytes - remainingbytes, remainingbytes);
+                if (bytesread < 0)
+                    return;
 
-            IPacket packet = IPacket.make();
-            if (container.readNextPacket(packet) < 0)
+                System.out.println("Packet " + count + " Size: " + numBytes + " Bytes read: " + bytesread);
+                remainingbytes -= bytesread;
+            }
+            while (remainingbytes > 0);
+            count++;
+            if (bytesread < 0)
                 break;
+
+            IPacket packet = IPacket.make(IBuffer.make(null, data, 0, numBytes));
+
+            //IPacket packet = IPacket.make();
+            //if (container.readNextPacket(packet) < 0)
+            //    break;
             //packet = packet0;
       /*
        * Now we have a packet, let's see if it belongs to our video stream
@@ -178,7 +191,7 @@ public class SmartFLVDecoder
                     int bytesDecoded = videoCoder.decodeVideo(picture, packet, offset);
                     if (bytesDecoded < 0)
                         throw new RuntimeException("got error decoding video in: "
-                                );
+                        );
                     offset += bytesDecoded;
 
           /*
@@ -201,7 +214,7 @@ public class SmartFLVDecoder
                                     picture.getWidth(), picture.getHeight());
                             if (resampler.resample(newPic, picture) < 0)
                                 throw new RuntimeException("could not resample video from: "
-                                        );
+                                );
                         }
                         if (newPic.getPixelType() != IPixelFormat.Type.BGR24)
                             throw new RuntimeException("could not decode video" +
@@ -275,6 +288,7 @@ public class SmartFLVDecoder
          */
                 do {} while(false);
             }
+
 
         }
         while (true);// (numBytes >= 0);

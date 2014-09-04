@@ -31,7 +31,7 @@ public class SmartFLVEncoder
      * @param filename Must contain the full path of that file that needs to be encoded
      */
     @SuppressWarnings("deprecation")
-    public SmartFLVEncoder(Socket clientSocket, String filename)
+    public SmartFLVEncoder(Socket clientSocket, DataOutputStream dos, String filename)
     {
         this.encodeFileName = filename;
         this.clientSocket = clientSocket;
@@ -51,7 +51,7 @@ public class SmartFLVEncoder
         }
 
         try {
-            socketOutputStream = new DataOutputStream(this.clientSocket.getOutputStream());
+            socketOutputStream = dos; //new DataOutputStream(this.clientSocket.getOutputStream());
         }
         catch (Exception e) {
             System.out.println("Failed to get output from socket " + e.getMessage());

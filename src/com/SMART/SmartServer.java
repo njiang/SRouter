@@ -44,7 +44,7 @@ class PacketHandler extends Thread {
                         return;
                     } */
 
-                    SmartFLVEncoder encoder = new SmartFLVEncoder(clientSocket, this.rootFilePath + filename);
+                    SmartFLVEncoder encoder = new SmartFLVEncoder(clientSocket, dos, this.rootFilePath + filename);
                     encoder.startEncoding();
 
                     /*IPacket dataPacket = IPacket.make();

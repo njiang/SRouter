@@ -6,10 +6,10 @@
 package com.SMART;
 
 import com.xuggle.ferry.IBuffer;
-import com.xuggle.xuggler.*;
-import com.xuggle.xuggler.demos.VideoImage;
+import com.xuggle.xuggler.IContainer;
+import com.xuggle.xuggler.IContainerFormat;
+import com.xuggle.xuggler.IPacket;
 
-import java.awt.image.BufferedImage;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
@@ -35,31 +35,6 @@ public class SmartPlayer {
             }
         }
     }
-
-    private static VideoImage mScreen = null;
-
-    private static void updateJavaWindow(BufferedImage javaImage)
-    {
-        mScreen.setImage(javaImage);
-    }
-
-    /**
-     * Opens a Swing window on screen.
-     */
-    private static void openJavaWindow()
-    {
-        mScreen = new VideoImage();
-    }
-
-    /**
-     * Forces the swing thread to terminate; I'm sure there is a right
-     * way to do this in swing, but this works too.
-     */
-    private static void closeJavaWindow()
-    {
-        System.exit(0);
-    }
-
 
     private void handlePackets(Socket clientSocket) {
         IContainer container = IContainer.make();
@@ -116,6 +91,7 @@ public class SmartPlayer {
         // Establish a channel with the immediate edge SMART router
         try {
             Socket clientSocket = new Socket(videoServerIP, SMART_Server_Port);
+            DataInputStream ins = new DataInputStream(clientSocket.getInputStream());
             String command = "Request " + "2012.flv" + "\n";
             byte[] sendData = command.getBytes();
             DataOutputStream os = new DataOutputStream(clientSocket.getOutputStream());
@@ -123,7 +99,7 @@ public class SmartPlayer {
             os.flush();
 
             //handlePackets(clientSocket);
-            SmartFLVDecoder decoder = new SmartFLVDecoder(clientSocket, (videoFilePath + fileName));
+            SmartFLVDecoder decoder = new SmartFLVDecoder(clientSocket, ins, (videoFilePath + fileName));
             decoder.startPlayback();
         }
         catch (Exception e) {
