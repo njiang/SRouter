@@ -2,10 +2,7 @@ package com.SMART;
 
 import com.xuggle.xuggler.IContainer;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -24,38 +21,45 @@ class PacketHandler extends Thread {
     public void run()
     {
         try {
-            OutputStream out = this.clientSocket.getOutputStream();
+            /*OutputStream out = this.clientSocket.getOutputStream();
             DataOutputStream dos = new DataOutputStream(out);
             BufferedReader in = new BufferedReader(
                         new InputStreamReader(
-                                this.clientSocket.getInputStream()));
-            String command;
-            if ((command = in.readLine()) != null) {
-                System.out.println("Command: " + command);
-                if (command.contains("Request")) {
-                    IContainer container = null;
-                    String[] splitted = command.split(" ");
-                    String filename = splitted[1];
+                                this.clientSocket.getInputStream()));  */
+            ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
+            SmartPacket packet = SmartPacket.ReadPacket(objis);
+            if (packet != null) {
+                if (packet.getType() == PacketType.REQUEST) {
+                    SmartRequest request = (SmartRequest)packet;
+                    String command = request.getCommand();
+                    if (command != null) {
+                        System.out.println("Command: " + command);
+                        if (command.contains("Request")) {
+                            IContainer container = null;
+                            String[] splitted = command.split(" ");
+                            String filename = splitted[1];
 
-                    /*container = IContainer.make();
+                            /*container = IContainer.make();
 
-                    if (container.open(this.rootFilePath + filename, IContainer.Type.READ, null) < 0) {
-                        System.out.println("failed to open");
-                        return;
-                    } */
+                            if (container.open(this.rootFilePath + filename, IContainer.Type.READ, null) < 0) {
+                                System.out.println("failed to open");
+                                return;
+                            } */
 
-                    SmartFLVEncoder encoder = new SmartFLVEncoder(clientSocket, dos, this.rootFilePath + filename);
-                    encoder.startEncoding();
+                            //SmartFLVEncoder encoder = new SmartFLVEncoder(clientSocket, dos, this.rootFilePath + filename);
+                            //encoder.startEncoding();
 
-                    /*IPacket dataPacket = IPacket.make();
-                    while(container.readNextPacket(dataPacket) >= 0)
-                    {
-                        int numBytes = dataPacket.getSize();
-                        byte[] buffer = dataPacket.getData().getByteArray(0, numBytes);
-                        //dos.writeInt(numBytes);
-                        dos.write(buffer, 0, numBytes);
-                    } */
-                    this.clientSocket.close();
+                            /*IPacket dataPacket = IPacket.make();
+                            while(container.readNextPacket(dataPacket) >= 0)
+                            {
+                                int numBytes = dataPacket.getSize();
+                                byte[] buffer = dataPacket.getData().getByteArray(0, numBytes);
+                                //dos.writeInt(numBytes);
+                                dos.write(buffer, 0, numBytes);
+                            } */
+                            this.clientSocket.close();
+                        }
+                    }
                 }
             }
         }
@@ -68,7 +72,7 @@ class PacketHandler extends Thread {
 class TCPServer
 {
     private ServerSocket serverSocket = null;
-    private int myPort = 8999;
+    private int myPort = 7999;
     private String[] neighboringRouters;
     private String rootFilePath = ".";
 
@@ -77,7 +81,7 @@ class TCPServer
         this.rootFilePath = rootFilePath;
 
         if (port >= 0)
-           myPort = port;
+            myPort = port;
         try {
             serverSocket = new ServerSocket(myPort);
         }
@@ -102,6 +106,8 @@ class TCPServer
         }
     }
 }
+
+
 
 /**
  * Created by Ning Jiang on 9/2/14.

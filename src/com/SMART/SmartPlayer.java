@@ -5,14 +5,9 @@
 
 package com.SMART;
 
-import com.xuggle.ferry.IBuffer;
-import com.xuggle.xuggler.IContainer;
-import com.xuggle.xuggler.IContainerFormat;
-import com.xuggle.xuggler.IPacket;
-
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.FileInputStream;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 
@@ -21,6 +16,7 @@ public class SmartPlayer {
     private int SMART_Client_Router_Port = 8999;
     private int SMART_Server_Port = 7999;
     private String videoServerIP = "127.0.0.1";
+    private String myIP = "127.0.0.1";
     private String videoFileName = "2012.flv";
     private String videoFilePath = "C:\\Temp\\";
 
@@ -36,69 +32,22 @@ public class SmartPlayer {
         }
     }
 
-    private void handlePackets(Socket clientSocket) {
-        IContainer container = IContainer.make();
-        IContainer outContainer = IContainer.make();
-
-        // we attempt to open up the container
-        try {
-            IContainerFormat rFormat = IContainerFormat.make();
-            rFormat.setInputFormat("flv");
-            int result = container.open(clientSocket.getInputStream(), rFormat, true, false);
-            // check if the operation was successful
-            if (result < 0)
-                throw new RuntimeException("Failed to open media file");
-            int numStreams = container.getNumStreams();
-
-            DataInputStream dis = new DataInputStream(clientSocket.getInputStream());
-            boolean hasData = true;
-            do {
-                try {
-                    int size = dis.readInt();
-                    byte[] data = new byte[size];
-                    dis.read(data);
-                    IPacket InPacket = IPacket.make(IBuffer.make(null, data, 0, data.length));
-                    InPacket.setKeyPacket(true);
-                    InPacket.setComplete(true, size);
-                    //retval = outContainer.writePacket(InPacket);
-
-                }
-                catch (Exception re) {
-                    hasData = false;
-                }
-            }
-            while (hasData);
-
-
-            /*IMediaDebugListener debugListener = ToolFactory.makeDebugListener();
-            IMediaReader reader = ToolFactory.makeReader(container);
-            IMediaViewer mediaViewer = ToolFactory.makeViewer(IMediaViewer.Mode.AUDIO_VIDEO, true);
-
-            reader.addListener(mediaViewer);
-            reader.addListener(debugListener);
-
-            // read out the contents of the media file, and sit back and watch
-            while (reader.readPacket() == null)
-                do {} while(false);      */
-        }
-        catch (Exception e) {
-            System.out.println("Failed to handle packet " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
     public void requestVideo(String fileName) {
         // Establish a channel with the immediate edge SMART router
         try {
-            Socket clientSocket = new Socket(videoServerIP, SMART_Server_Port);
+            Socket clientSocket = new Socket(neighboringRouterIP, SMART_Client_Router_Port); // (videoServerIP, SMART_Server_Port);
             DataInputStream ins = new DataInputStream(clientSocket.getInputStream());
             String command = "Request " + "2012.flv" + "\n";
-            byte[] sendData = command.getBytes();
-            DataOutputStream os = new DataOutputStream(clientSocket.getOutputStream());
-            os.writeBytes(command);
-            os.flush();
+            //byte[] sendData = command.getBytes();
+            //DataOutputStream os = new DataOutputStream(clientSocket.getOutputStream());
+            //os.writeBytes(command);
+            //os.flush();
+            IPPortPair srcAddr = new IPPortPair(clientSocket.getLocalAddress().getHostAddress(), clientSocket.getLocalPort());
+            IPPortPair destAddr = new IPPortPair(videoServerIP, 0);  // port is not used anyway
+            SmartRequest request = new SmartRequest(srcAddr, destAddr, command);
+            ObjectOutputStream objos = new ObjectOutputStream(clientSocket.getOutputStream());
+            objos.writeObject(request);
 
-            //handlePackets(clientSocket);
             SmartFLVDecoder decoder = new SmartFLVDecoder(clientSocket, ins, (videoFilePath + fileName));
             decoder.startPlayback();
         }
