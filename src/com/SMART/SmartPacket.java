@@ -17,8 +17,7 @@ public class SmartPacket implements Serializable {
     PacketType myType;
     IPPortPair sourceIPPort;
     ArrayList<IPPortPair> destinationIPPorts = new ArrayList<IPPortPair>();
-    byte[] data;
-    int packetLength;
+
 
     public SmartPacket() {}
 

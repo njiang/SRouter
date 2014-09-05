@@ -1,5 +1,6 @@
 package com.SMART;
 
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.HashMap;
@@ -16,6 +17,7 @@ public class SmartRouter extends Thread {
     private String[] neighborIPs;
     private Socket videoServerSocket; // socket connecting to the video server if applicable
     private ObjectOutputStream videoServerOutputStream;
+    private ObjectInputStream videoServerInputStream;
     private HashMap<String, Socket> neighborSockets = new HashMap<String, Socket>();
     private SmartBufferManager smartBufferManager;
 
@@ -55,7 +57,25 @@ public class SmartRouter extends Thread {
     {
         try {
             while(true) {
-                sleep(5000);
+                try {
+                //sleep(5000);
+                    if (videoServerInputStream == null && videoServerSocket != null)
+                        videoServerInputStream = new ObjectInputStream(videoServerSocket.getInputStream());
+                    if (videoServerInputStream != null) {
+                        SmartPacket packet = (SmartPacket)videoServerInputStream.readObject();
+                        if (packet.getType() == PacketType.DATA) {
+                            // Let the client facing server to decide whether the packet should be
+                            // forwarded to one of the client apps
+                            clientFacingTCPServer.handleDataPacket((SmartDataPacket)packet);
+
+                            // TODO
+                            // Process by Smart Buffer Manager
+                        }
+                    }
+                }
+                catch (Exception e) {
+                    System.out.println("Failed to read packet from video server " + e.getMessage());
+                }
             }
         }
         catch (Exception e) {
@@ -63,6 +83,13 @@ public class SmartRouter extends Thread {
         }
     }
 
+    /**
+     * Processes packets received from client apps
+     * If it's a request, forward it to the server if the smart router is neighboring to the video server;
+     * otherwise forward to the smart router closer to the server based on the routing algorithm
+     * @param packet packet received from client apps
+     *
+     */
     public void handlePacket(SmartPacket packet)
     {
         try {
@@ -77,6 +104,7 @@ public class SmartRouter extends Thread {
                         }
                     }
                     else {
+                        // TODO
                         // Send request packet to the neighboring node that is closest to the video server
 
                     }

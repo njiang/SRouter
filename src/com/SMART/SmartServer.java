@@ -26,6 +26,7 @@ class PacketHandler extends Thread {
             BufferedReader in = new BufferedReader(
                         new InputStreamReader(
                                 this.clientSocket.getInputStream()));  */
+            ObjectOutputStream objos = new ObjectOutputStream(this.clientSocket.getOutputStream());
             ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
             SmartPacket packet = SmartPacket.ReadPacket(objis);
             if (packet != null) {
@@ -39,24 +40,9 @@ class PacketHandler extends Thread {
                             String[] splitted = command.split(" ");
                             String filename = splitted[1];
 
-                            /*container = IContainer.make();
+                            SmartFLVEncoder encoder = new SmartFLVEncoder(request, clientSocket, objos, this.rootFilePath + filename);
+                            encoder.startEncoding();
 
-                            if (container.open(this.rootFilePath + filename, IContainer.Type.READ, null) < 0) {
-                                System.out.println("failed to open");
-                                return;
-                            } */
-
-                            //SmartFLVEncoder encoder = new SmartFLVEncoder(clientSocket, dos, this.rootFilePath + filename);
-                            //encoder.startEncoding();
-
-                            /*IPacket dataPacket = IPacket.make();
-                            while(container.readNextPacket(dataPacket) >= 0)
-                            {
-                                int numBytes = dataPacket.getSize();
-                                byte[] buffer = dataPacket.getData().getByteArray(0, numBytes);
-                                //dos.writeInt(numBytes);
-                                dos.write(buffer, 0, numBytes);
-                            } */
                             this.clientSocket.close();
                         }
                     }

@@ -1,8 +1,10 @@
 package com.SMART;
 
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 
@@ -21,24 +23,10 @@ class ClientPacketHandler extends Thread
     {
         try {
             if (this.clientSocket != null) {
-                //BufferedReader in = new BufferedReader(
-                //        new InputStreamReader(
-                //                this.clientSocket.getInputStream()));
                 ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
                 SmartPacket packet = SmartPacket.ReadPacket(objis);
+                // process the packet received from client apps
                 this.tcpServer.getSmartRouter().handlePacket(packet);
-
-                /*if (packet.getType() == PacketType.REQUEST) {
-                    SmartRequest request = (SmartRequest)packet;
-                    String command = request.getCommand();
-                    if (command != null) {
-                        System.out.println("Command: " + command);
-                        if (command.contains("Request")) {
-                            // Got a video request, we pass it to the next SMART node, or the server
-
-                        }
-                    }
-                } */
             }
         }
         catch (Exception e) {
@@ -60,7 +48,7 @@ public class ClientFacingTCPServer extends Thread
 {
     ServerSocket serverSocket;
     SmartRouter smartRouter;
-    HashMap<IPPortPair, Socket> socketMap = new HashMap<IPPortPair, Socket>();
+    HashMap<IPPortPair, ObjectOutputStream> socketMap = new HashMap<IPPortPair, ObjectOutputStream>();
 
     public ClientFacingTCPServer(SmartRouter sr, int port)
     {
@@ -82,7 +70,9 @@ public class ClientFacingTCPServer extends Thread
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 IPPortPair pair = new IPPortPair(clientSocket.getInetAddress().getHostAddress(), clientSocket.getPort());
-                socketMap.put(pair, clientSocket);
+                ObjectOutputStream objos = new ObjectOutputStream(clientSocket.getOutputStream());
+                // Save the client socket for later reference
+                socketMap.put(pair, objos);
                 ClientPacketHandler clientPacketHandler = new ClientPacketHandler(this, clientSocket);
                 clientPacketHandler.start();
             }
@@ -90,6 +80,39 @@ public class ClientFacingTCPServer extends Thread
         catch (Exception e) {
             System.out.println("Error processing client facing server socket " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Handles data packets received from either the video server or other routers
+     * @param packet
+     */
+    public void handleDataPacket(SmartDataPacket packet) {
+        if (packet != null) {
+            ArrayList<IPPortPair> dests = packet.getDestinationIPPorts();
+            if (dests != null) {
+                for (int i = 0; i < dests.size(); i++) {
+                    IPPortPair dest = dests.get(i);
+                    if (socketMap.containsKey(dest)) {
+                        ObjectOutputStream objos = socketMap.get(dest);
+                        if (objos != null) {
+                            try {
+                                objos.writeObject(packet);
+                                objos.reset();
+                            }
+                            catch (Exception e) {
+                                System.out.println("Failed to process packet for " + dest.getIPAddress() + " " + dest.getPort() + " " + e.getMessage());
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                    else {
+                        // TODO
+                        // We need to forward the packet to the router closer to the client app
+                        // based on our routing algorithm
+                    }
+                }
+            }
         }
     }
 }

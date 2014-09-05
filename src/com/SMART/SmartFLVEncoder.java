@@ -4,8 +4,8 @@ import com.xuggle.xuggler.*;
 import com.xuggle.xuggler.demos.VideoImage;
 
 import java.awt.image.BufferedImage;
-import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 /**
@@ -21,7 +21,8 @@ public class SmartFLVEncoder
     IContainer container = null;
     String encodeFileName = "";
     Socket clientSocket = null;
-    DataOutputStream socketOutputStream = null;
+    ObjectOutputStream socketOutputStream = null;
+    SmartRequest requestPacket;
 
     /**
      * Takes a media container (file) as the first argument, opens it,
@@ -31,8 +32,9 @@ public class SmartFLVEncoder
      * @param filename Must contain the full path of that file that needs to be encoded
      */
     @SuppressWarnings("deprecation")
-    public SmartFLVEncoder(Socket clientSocket, DataOutputStream dos, String filename)
+    public SmartFLVEncoder(SmartRequest request, Socket clientSocket, ObjectOutputStream objos, String filename)
     {
+        this.requestPacket = request;
         this.encodeFileName = filename;
         this.clientSocket = clientSocket;
 
@@ -51,7 +53,7 @@ public class SmartFLVEncoder
         }
 
         try {
-            socketOutputStream = dos; //new DataOutputStream(this.clientSocket.getOutputStream());
+            socketOutputStream = objos; //new DataOutputStream(this.clientSocket.getOutputStream());
         }
         catch (Exception e) {
             System.out.println("Failed to get output from socket " + e.getMessage());
@@ -129,9 +131,16 @@ public class SmartFLVEncoder
             {
                 int numBytes = packet.getSize();
                 byte[] buffer = packet.getData().getByteArray(0, numBytes);
-                socketOutputStream.writeInt(numBytes);
-                socketOutputStream.write(buffer, 0, numBytes);
+                //socketOutputStream.writeInt(numBytes);
+                //socketOutputStream.write(buffer, 0, numBytes); */
+                IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
+                IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
+                IPPortPair[] dests = new IPPortPair[1];
+                dests[0] = dest;
+                SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes);
                 System.out.println("Packet " + count + " Size: " + numBytes);
+                socketOutputStream.writeObject(dataPacket);
+                socketOutputStream.reset();
                 count++;
             }
             else

@@ -25,8 +25,8 @@ import com.xuggle.xuggler.*;
 import com.xuggle.xuggler.demos.VideoImage;
 
 import java.awt.image.BufferedImage;
-import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.net.Socket;
 
 /**
@@ -42,7 +42,7 @@ public class SmartFLVDecoder
     IContainer container = null;
     Socket clientSocket = null;
     String decodeFileName = "";
-    DataInputStream socketInputStream = null;
+    ObjectInputStream socketInputStream = null;
     /**
      * Takes a media container (file) as the first argument, opens it,
      * opens up a Swing window and displays
@@ -51,7 +51,7 @@ public class SmartFLVDecoder
      * @param clientSocket Must contain the socket that connects to the SMART router
      */
     @SuppressWarnings("deprecation")
-    public SmartFLVDecoder(Socket clientSocket, DataInputStream ins, String filename)
+    public SmartFLVDecoder(Socket clientSocket, ObjectInputStream ins, String filename)
     {
         this.decodeFileName = filename;
         this.clientSocket = clientSocket;
@@ -146,30 +146,20 @@ public class SmartFLVDecoder
         int bytesread = 0;
         do
         {
-            numBytes = socketInputStream.readInt();
-            if (numBytes < 0)
-                break;
-            byte[] data = new byte[numBytes];
-            int remainingbytes = numBytes;
-            do {
-                bytesread = socketInputStream.read(data, numBytes - remainingbytes, remainingbytes);
-                if (bytesread < 0)
-                    return;
-
-                System.out.println("Packet " + count + " Size: " + numBytes + " Bytes read: " + bytesread);
-                remainingbytes -= bytesread;
+            SmartDataPacket dataPacket = null;
+            try {
+                dataPacket = (SmartDataPacket)socketInputStream.readObject();
             }
-            while (remainingbytes > 0);
+            catch (Exception e) {
+                System.out.println("Failed to read packet " + e.getMessage());
+            }
+
+            if (dataPacket == null)
+                continue;
+
             count++;
-            if (bytesread < 0)
-                break;
+            IPacket packet = IPacket.make(IBuffer.make(null, dataPacket.getData(), 0, dataPacket.getLength()));
 
-            IPacket packet = IPacket.make(IBuffer.make(null, data, 0, numBytes));
-
-            //IPacket packet = IPacket.make();
-            //if (container.readNextPacket(packet) < 0)
-            //    break;
-            //packet = packet0;
       /*
        * Now we have a packet, let's see if it belongs to our video stream
        */
@@ -297,7 +287,7 @@ public class SmartFLVDecoder
      * the garbage collector... but because we're nice people and want
      * to be invited places for Christmas, we're going to show how to clean up.
      */
-        if (videoCoder != null)
+        /*if (videoCoder != null)
         {
             videoCoder.close();
             videoCoder = null;
@@ -307,7 +297,7 @@ public class SmartFLVDecoder
             container.close();
             container = null;
         }
-        closeJavaWindow();
+        closeJavaWindow(); */
 
     }
 

@@ -17,4 +17,19 @@ public class IPPortPair implements Serializable {
 
     public String getIPAddress() { return IPAddress; }
     public int getPort() { return port; }
+
+    public boolean equals(Object other)
+    {
+        IPPortPair otherpair = (IPPortPair)other;
+        if (otherpair != null) {
+            if (this.IPAddress.equalsIgnoreCase(otherpair.getIPAddress()) && this.port == otherpair.getPort())
+                return true;
+        }
+        return false;
+    }
+
+    public int hashCode()
+    {
+        return IPAddress.hashCode() + port;
+    }
 }

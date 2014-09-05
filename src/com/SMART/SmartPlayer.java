@@ -5,8 +5,8 @@
 
 package com.SMART;
 
-import java.io.DataInputStream;
 import java.io.FileInputStream;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 
@@ -33,11 +33,10 @@ public class SmartPlayer {
     }
 
     public void requestVideo(String fileName) {
-        // Establish a channel with the immediate edge SMART router
         try {
             Socket clientSocket = new Socket(neighboringRouterIP, SMART_Client_Router_Port); // (videoServerIP, SMART_Server_Port);
-            DataInputStream ins = new DataInputStream(clientSocket.getInputStream());
-            String command = "Request " + "2012.flv" + "\n";
+            ObjectInputStream ins = new ObjectInputStream(clientSocket.getInputStream());
+            String command = "Request " + "2012.flv"; // + "\n";
             //byte[] sendData = command.getBytes();
             //DataOutputStream os = new DataOutputStream(clientSocket.getOutputStream());
             //os.writeBytes(command);
