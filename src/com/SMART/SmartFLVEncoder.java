@@ -72,6 +72,8 @@ public class SmartFLVEncoder
         // and iterate through the streams to find the first video stream
         int videoStreamId = -1;
         IStreamCoder videoCoder = null;
+        int audioStreamId = -1;
+        IStreamCoder audioCoder = null;
         for(int i = 0; i < numStreams; i++)
         {
             // Find the stream object
@@ -79,11 +81,15 @@ public class SmartFLVEncoder
             // Get the pre-configured decoder that can decode this stream;
             IStreamCoder coder = stream.getStreamCoder();
 
-            if (coder.getCodecType() == ICodec.Type.CODEC_TYPE_VIDEO)
+            if (videoStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_VIDEO)
             {
                 videoStreamId = i;
                 videoCoder = coder;
-                break;
+            }
+            else if (audioStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_AUDIO)
+            {
+                audioStreamId = i;
+                audioCoder = coder;
             }
         }
         if (videoStreamId == -1)
@@ -127,7 +133,7 @@ public class SmartFLVEncoder
       /*
        * Now we have a packet, let's see if it belongs to our video stream
        */
-            if (packet.getStreamIndex() == videoStreamId)
+            if (packet.getStreamIndex() == videoStreamId || packet.getStreamIndex() == audioStreamId)
             {
                 int numBytes = packet.getSize();
                 byte[] buffer = packet.getData().getByteArray(0, numBytes);
@@ -137,8 +143,10 @@ public class SmartFLVEncoder
                 IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
                 IPPortPair[] dests = new IPPortPair[1];
                 dests[0] = dest;
-                SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes);
-                System.out.println("Packet " + count + " Size: " + numBytes);
+
+                // somehow the streamindex is not preserved during data transmission, we record it in the SmartDataPacket
+                SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes, packet.getStreamIndex());
+                System.out.println("Packet " + count + " Size: " + numBytes + " Stream index " + packet.getStreamIndex());
                 socketOutputStream.writeObject(dataPacket);
                 socketOutputStream.reset();
                 count++;

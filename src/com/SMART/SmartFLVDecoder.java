@@ -24,6 +24,7 @@ import com.xuggle.ferry.IBuffer;
 import com.xuggle.xuggler.*;
 import com.xuggle.xuggler.demos.VideoImage;
 
+import javax.sound.sampled.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -43,6 +44,11 @@ public class SmartFLVDecoder
     Socket clientSocket = null;
     String decodeFileName = "";
     ObjectInputStream socketInputStream = null;
+    private SourceDataLine mLine;
+    private long mSystemVideoClockStartTime;
+
+    private long mFirstVideoTimestampInStream;
+
     /**
      * Takes a media container (file) as the first argument, opens it,
      * opens up a Swing window and displays
@@ -92,6 +98,8 @@ public class SmartFLVDecoder
         // and iterate through the streams to find the first video stream
         int videoStreamId = -1;
         IStreamCoder videoCoder = null;
+        int audioStreamId = -1;
+        IStreamCoder audioCoder = null;
         for(int i = 0; i < numStreams; i++)
         {
             // Find the stream object
@@ -99,16 +107,19 @@ public class SmartFLVDecoder
             // Get the pre-configured decoder that can decode this stream;
             IStreamCoder coder = stream.getStreamCoder();
 
-            if (coder.getCodecType() == ICodec.Type.CODEC_TYPE_VIDEO)
+            if (videoStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_VIDEO)
             {
                 videoStreamId = i;
                 videoCoder = coder;
-                break;
+            }
+            else if (audioStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_AUDIO)
+            {
+                audioStreamId = i;
+                audioCoder = coder;
             }
         }
-        if (videoStreamId == -1)
-            throw new RuntimeException("could not find video stream in container: "
-                    );
+        if (videoStreamId == -1 && audioStreamId == -1)
+            throw new RuntimeException("could not find audio or video stream in container: ");
 
     /*
      * Now we have found the video stream in this file.  Let's open up our decoder so it can
@@ -135,15 +146,35 @@ public class SmartFLVDecoder
      */
         openJavaWindow();
 
+
+        if (audioCoder != null)
+        {
+            if (audioCoder.open() < 0)
+                throw new RuntimeException("could not open audio decoder for container: ");
+
+      /*
+       * And once we have that, we ask the Java Sound System to get itself ready.
+       */
+            try
+            {
+                openJavaSound(audioCoder);
+            }
+            catch (LineUnavailableException ex)
+            {
+                throw new RuntimeException("unable to open sound device on your system when playing back container: ");
+            }
+        }
+
+
     /*
      * Now, we start walking through the container looking at each packet.
      */
-        //IPacket packet = IPacket.make();
-        long firstTimestampInStream = Global.NO_PTS;
-        long systemClockStartTime = 0;
+        mFirstVideoTimestampInStream = Global.NO_PTS;
+        mSystemVideoClockStartTime = 0;
         int numBytes = 0;
         int count = 0;
         int bytesread = 0;
+        //IPacket packet = IPacket.make();
         do
         {
             SmartDataPacket dataPacket = null;
@@ -155,118 +186,114 @@ public class SmartFLVDecoder
             }
 
             if (dataPacket == null)
-                continue;
+                break;
 
-            count++;
             IPacket packet = IPacket.make(IBuffer.make(null, dataPacket.getData(), 0, dataPacket.getLength()));
+            System.out.println("Received packet " + count + " " + dataPacket.getLength() + " stream index " + packet.getStreamIndex());
+            count++;
+
+            //container.readNextPacket(packet);
+            //if (packet == null)
+            //    break;
+
 
       /*
        * Now we have a packet, let's see if it belongs to our video stream
        */
-            if (packet.getStreamIndex() == videoStreamId)
+            if (dataPacket.getStreamIndex() == videoStreamId)
             {
-        /*
+         /*
          * We allocate a new picture to get the data out of Xuggler
          */
                 IVideoPicture picture = IVideoPicture.make(videoCoder.getPixelType(),
                         videoCoder.getWidth(), videoCoder.getHeight());
 
+        /*
+         * Now, we decode the video, checking for any errors.
+         *
+         */
+                int bytesDecoded = videoCoder.decodeVideo(picture, packet, 0);
+                if (bytesDecoded < 0)
+                    throw new RuntimeException("got error decoding audio in: ");
+
+        /*
+         * Some decoders will consume data in a packet, but will not be able to construct
+         * a full video picture yet.  Therefore you should always check if you
+         * got a complete picture from the decoder
+         */
+                if (picture.isComplete())
+                {
+                    IVideoPicture newPic = picture;
+          /*
+           * If the resampler is not null, that means we didn't get the video in BGR24 format and
+           * need to convert it into BGR24 format.
+           */
+                    if (resampler != null)
+                    {
+                        // we must resample
+                        newPic = IVideoPicture.make(resampler.getOutputPixelFormat(), picture.getWidth(), picture.getHeight());
+                        if (resampler.resample(newPic, picture) < 0)
+                            throw new RuntimeException("could not resample video from: ");
+                    }
+                    if (newPic.getPixelType() != IPixelFormat.Type.BGR24)
+                        throw new RuntimeException("could not decode video as BGR 24 bit data in: ");
+
+                    long delay = millisecondsUntilTimeToDisplay(newPic);
+                    // if there is no audio stream; go ahead and hold up the main thread.  We'll end
+                    // up caching fewer video pictures in memory that way.
+                    try
+                    {
+                        if (delay > 0)
+                            Thread.sleep(delay);
+                    }
+                    catch (InterruptedException e)
+                    {
+                        return;
+                    }
+
+                    // And finally, convert the picture to an image and display it
+
+                    mScreen.setImage(Utils.videoPictureToImage(newPic));
+                }
+            }
+            else if (dataPacket.getStreamIndex() == audioStreamId)
+            {
+        /*
+         * We allocate a set of samples with the same number of channels as the
+         * coder tells us is in this buffer.
+         *
+         * We also pass in a buffer size (1024 in our example), although Xuggler
+         * will probably allocate more space than just the 1024 (it's not important why).
+         */
+                IAudioSamples samples = IAudioSamples.make(1024, audioCoder.getChannels());
+
+        /*
+         * A packet can actually contain multiple sets of samples (or frames of samples
+         * in audio-decoding speak).  So, we may need to call decode audio multiple
+         * times at different offsets in the packet's data.  We capture that here.
+         */
                 int offset = 0;
+
+        /*
+         * Keep going until we've processed all data
+         */
                 while(offset < packet.getSize())
                 {
-          /*
-           * Now, we decode the video, checking for any errors.
-           *
-           */
-                    int bytesDecoded = videoCoder.decodeVideo(picture, packet, offset);
+                    int bytesDecoded = audioCoder.decodeAudio(samples, packet, offset);
                     if (bytesDecoded < 0)
-                        throw new RuntimeException("got error decoding video in: "
-                        );
+                        throw new RuntimeException("got error decoding audio in: " );
                     offset += bytesDecoded;
-
           /*
-           * Some decoders will consume data in a packet, but will not be able to construct
-           * a full video picture yet.  Therefore you should always check if you
-           * got a complete picture from the decoder
+           * Some decoder will consume data in a packet, but will not be able to construct
+           * a full set of samples yet.  Therefore you should always check if you
+           * got a complete set of samples from the decoder
            */
-                    if (picture.isComplete())
+                    if (samples.isComplete())
                     {
-                        IVideoPicture newPic = picture;
-            /*
-             * If the resampler is not null, that means we didn't get the
-             * video in BGR24 format and
-             * need to convert it into BGR24 format.
-             */
-                        if (resampler != null)
-                        {
-                            // we must resample
-                            newPic = IVideoPicture.make(resampler.getOutputPixelFormat(),
-                                    picture.getWidth(), picture.getHeight());
-                            if (resampler.resample(newPic, picture) < 0)
-                                throw new RuntimeException("could not resample video from: "
-                                );
-                        }
-                        if (newPic.getPixelType() != IPixelFormat.Type.BGR24)
-                            throw new RuntimeException("could not decode video" +
-                                    " as BGR 24 bit data in: ");
-
-                        /**
-                         * We could just display the images as quickly as we decode them,
-                         * but it turns out we can decode a lot faster than you think.
-                         *
-                         * So instead, the following code does a poor-man's version of
-                         * trying to match up the frame-rate requested for each
-                         * IVideoPicture with the system clock time on your computer.
-                         *
-                         * Remember that all Xuggler IAudioSamples and IVideoPicture objects
-                         * always give timestamps in Microseconds, relative to the first
-                         * decoded item. If instead you used the packet timestamps, they can
-                         * be in different units depending on your IContainer, and IStream
-                         * and things can get hairy quickly.
-                         */
-                        if (firstTimestampInStream == Global.NO_PTS)
-                        {
-                            // This is our first time through
-                            firstTimestampInStream = picture.getTimeStamp();
-                            // get the starting clock time so we can hold up frames
-                            // until the right time.
-                            systemClockStartTime = System.currentTimeMillis();
-                        } else {
-                            long systemClockCurrentTime = System.currentTimeMillis();
-                            long millisecondsClockTimeSinceStartofVideo =
-                                    systemClockCurrentTime - systemClockStartTime;
-                            // compute how long for this frame since the first frame in the
-                            // stream.
-                            // remember that IVideoPicture and IAudioSamples timestamps are
-                            // always in MICROSECONDS,
-                            // so we divide by 1000 to get milliseconds.
-                            long millisecondsStreamTimeSinceStartOfVideo =
-                                    (picture.getTimeStamp() - firstTimestampInStream)/1000;
-                            final long millisecondsTolerance = 50; // and we give ourselfs 50 ms of tolerance
-                            final long millisecondsToSleep =
-                                    (millisecondsStreamTimeSinceStartOfVideo -
-                                            (millisecondsClockTimeSinceStartofVideo +
-                                                    millisecondsTolerance));
-                            if (millisecondsToSleep > 0)
-                            {
-                                try
-                                {
-                                    Thread.sleep(millisecondsToSleep);
-                                }
-                                catch (InterruptedException e)
-                                {
-                                    // we might get this when the user closes the dialog box, so
-                                    // just return from the method.
-                                    return;
-                                }
-                            }
-                        }
-
-                        // And finally, convert the BGR24 to an Java buffered image
-                        BufferedImage javaImage = Utils.videoPictureToImage(newPic);
-
-                        // and display it on the Java Swing window
-                        updateJavaWindow(javaImage);
+                        // note: this call will block if Java's sound buffers fill up, and we're
+                        // okay with that.  That's why we have the video "sleeping" occur
+                        // on another thread.
+                        playJavaSound(samples);
                     }
                 }
             }
@@ -327,5 +354,90 @@ public class SmartFLVDecoder
     private void closeJavaWindow()
     {
         System.exit(0);
+    }
+
+
+    private void openJavaSound(IStreamCoder aAudioCoder) throws LineUnavailableException
+    {
+        AudioFormat audioFormat = new AudioFormat(aAudioCoder.getSampleRate(),
+                (int)IAudioSamples.findSampleBitDepth(aAudioCoder.getSampleFormat()),
+                aAudioCoder.getChannels(),
+                true, /* xuggler defaults to signed 16 bit samples */
+                false);
+        DataLine.Info info = new DataLine.Info(SourceDataLine.class, audioFormat);
+        mLine = (SourceDataLine) AudioSystem.getLine(info);
+        /**
+         * if that succeeded, try opening the line.
+         */
+        mLine.open(audioFormat);
+        /**
+         * And if that succeed, start the line.
+         */
+        mLine.start();
+
+
+    }
+
+    private void playJavaSound(IAudioSamples aSamples)
+    {
+        /**
+         * We're just going to dump all the samples into the line.
+         */
+        byte[] rawBytes = aSamples.getData().getByteArray(0, aSamples.getSize());
+        mLine.write(rawBytes, 0, aSamples.getSize());
+    }
+
+    private void closeJavaSound()
+    {
+        if (mLine != null)
+        {
+      /*
+       * Wait for the line to finish playing
+       */
+            mLine.drain();
+      /*
+       * Close the line.
+       */
+            mLine.close();
+            mLine=null;
+        }
+    }
+
+    private long millisecondsUntilTimeToDisplay(IVideoPicture picture)
+    {
+        /**
+         * We could just display the images as quickly as we decode them, but it turns
+         * out we can decode a lot faster than you think.
+         *
+         * So instead, the following code does a poor-man's version of trying to
+         * match up the frame-rate requested for each IVideoPicture with the system
+         * clock time on your computer.
+         *
+         * Remember that all Xuggler IAudioSamples and IVideoPicture objects always
+         * give timestamps in Microseconds, relative to the first decoded item.  If
+         * instead you used the packet timestamps, they can be in different units depending
+         * on your IContainer, and IStream and things can get hairy quickly.
+         */
+        long millisecondsToSleep = 0;
+        if (mFirstVideoTimestampInStream == Global.NO_PTS)
+        {
+            // This is our first time through
+            mFirstVideoTimestampInStream = picture.getTimeStamp();
+            // get the starting clock time so we can hold up frames
+            // until the right time.
+            mSystemVideoClockStartTime = System.currentTimeMillis();
+            millisecondsToSleep = 0;
+        } else {
+            long systemClockCurrentTime = System.currentTimeMillis();
+            long millisecondsClockTimeSinceStartofVideo = systemClockCurrentTime - mSystemVideoClockStartTime;
+            // compute how long for this frame since the first frame in the stream.
+            // remember that IVideoPicture and IAudioSamples timestamps are always in MICROSECONDS,
+            // so we divide by 1000 to get milliseconds.
+            long millisecondsStreamTimeSinceStartOfVideo = (picture.getTimeStamp() - mFirstVideoTimestampInStream)/1000;
+            final long millisecondsTolerance = 50; // and we give ourselfs 50 ms of tolerance
+            millisecondsToSleep = (millisecondsStreamTimeSinceStartOfVideo -
+                    (millisecondsClockTimeSinceStartofVideo+millisecondsTolerance));
+        }
+        return millisecondsToSleep;
     }
 }
