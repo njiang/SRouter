@@ -88,6 +88,9 @@ public class SmartFLVDecoder
         if (socketInputStream == null)
             return;
 
+        // We "cheat" a little here.  We open a flv file in the container first,
+        // then we feed the decoders with packets received from the encoder.
+        // Make sure both encoder and decoder use the same file!
         if (container.open(decodeFileName, IContainer.Type.READ, null) < 0) {
             System.out.println("failed to open");
         }

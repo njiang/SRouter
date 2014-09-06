@@ -97,31 +97,6 @@ public class SmartFLVEncoder
             );
 
     /*
-     * Now we have found the video stream in this file.  Let's open up our decoder so it can
-     * do work.
-     */
-        if (videoCoder.open() < 0)
-            throw new RuntimeException("could not open video decoder for container: "
-            );
-
-        /*IVideoResampler resampler = null;
-        if (videoCoder.getPixelType() != IPixelFormat.Type.BGR24)
-        {
-            // if this stream is not in BGR24, we're going to need to
-            // convert it.  The VideoResampler does that for us.
-            resampler = IVideoResampler.make(videoCoder.getWidth(),
-                    videoCoder.getHeight(), IPixelFormat.Type.BGR24,
-                    videoCoder.getWidth(), videoCoder.getHeight(), videoCoder.getPixelType());
-            if (resampler == null)
-                throw new RuntimeException("could not create color space " +
-                        "resampler for: ");
-        }  */
-    /*
-     * And once we have that, we draw a window on screen
-     */
-        //openJavaWindow();
-
-    /*
      * Now, we start walking through the container looking at each packet.
      */
         IPacket packet = IPacket.make();
