@@ -2,7 +2,9 @@ package com.SMART;
 
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 
@@ -20,13 +22,26 @@ public class SmartRouter extends Thread {
     private ObjectInputStream videoServerInputStream;
     private HashMap<String, Socket> neighborSockets = new HashMap<String, Socket>();
     private SmartBufferManager smartBufferManager;
+    private NaiveRouting routingModule;
+    private String myIP;
 
     public SmartRouter(String[] args)
     {
+        try {
+            myIP = InetAddress.getLocalHost().getHostAddress();
+        }
+        catch (Exception e) {
+            System.out.println("Failed to get local IP address");
+        }
+
         // TODO
         // Read neighboring nodes from configuration file
-        neighborIPs = new String[1];
-        neighborIPs[0] = "**127.0.0.1"; // prefix ** means it's the video server
+        if (args.length >= 1)
+            routingModule = new NaiveRouting(myIP, args[0]);
+
+        //neighborIPs = new String[1];
+        //neighborIPs[0] = "**127.0.0.1"; // prefix ** means it's the video server
+        ArrayList<String> neighborIPs = routingModule.getNeighboringRouters(myIP);
 
         try {
             clientFacingTCPServer = new ClientFacingTCPServer(this, Smart_Client_Facing_Port);
@@ -35,16 +50,18 @@ public class SmartRouter extends Thread {
             routerTCPServer = new SmartRouterTCPServer(this, Smart_Node_Port);
             routerTCPServer.start();
 
-            for (int i = 0; i < neighborIPs.length; i++) {
-                if (neighborIPs[i].startsWith("**"))
+            if (routingModule.isNeighboringToServer()) {
+
+                videoServerSocket = new Socket(routingModule.getServerIP(), Server_Port);
+                videoServerOutputStream = new ObjectOutputStream(videoServerSocket.getOutputStream());
+            }
+
+            for (int i = 0; i < neighborIPs.size(); i++) {
+                String addr = neighborIPs.get(i);
+                if (!addr.equals(myIP))
                 {
-                    String serverIP = neighborIPs[i].substring(2);
-                    videoServerSocket = new Socket(serverIP, Server_Port);
-                    videoServerOutputStream = new ObjectOutputStream(videoServerSocket.getOutputStream());
-                }
-                else {
-                    Socket smartNodeSocket = new Socket(neighborIPs[i], Smart_Node_Port);
-                    neighborSockets.put(neighborIPs[i], smartNodeSocket);
+                    Socket smartNodeSocket = new Socket(addr, Smart_Node_Port);
+                    neighborSockets.put(addr, smartNodeSocket);
                 }
             }
         }

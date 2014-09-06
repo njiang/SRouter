@@ -2,6 +2,7 @@ package com.SMART;
 
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -69,7 +70,12 @@ public class ClientFacingTCPServer extends Thread
         try {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                IPPortPair pair = new IPPortPair(clientSocket.getInetAddress().getHostAddress(), clientSocket.getPort());
+                String socketAddr = clientSocket.getInetAddress().getHostAddress();
+                // If client is on the same machine, we use host address instead
+                // since we use host address in routing table
+                if (socketAddr.equals("127.0.0.1"))
+                    socketAddr = InetAddress.getLocalHost().getHostAddress();
+                IPPortPair pair = new IPPortPair(socketAddr, clientSocket.getPort());
                 ObjectOutputStream objos = new ObjectOutputStream(clientSocket.getOutputStream());
                 // Save the client socket for later reference
                 socketMap.put(pair, objos);

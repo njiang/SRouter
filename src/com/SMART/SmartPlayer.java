@@ -5,9 +5,11 @@
 
 package com.SMART;
 
-import java.io.FileInputStream;
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetAddress;
 import java.net.Socket;
 
 
@@ -24,7 +26,18 @@ public class SmartPlayer {
         if (args.length > 0) {
             String configFilePath = args[0];
             try {
-                FileInputStream configFileStream = new FileInputStream(configFilePath);
+                FileReader freader = new FileReader(configFilePath);
+                BufferedReader reader = new BufferedReader(freader);
+                do {
+                    String line = reader.readLine();
+                    if (line == null)
+                        break;
+                    if (!line.isEmpty()) {
+                        neighboringRouterIP = line;
+                        break;
+                    }
+                }
+                while (true);
             }
             catch (Exception e) {
                 System.out.println("Failed to open configuration file " + e.getMessage());
@@ -34,14 +47,11 @@ public class SmartPlayer {
 
     public void requestVideo(String fileName) {
         try {
-            Socket clientSocket = new Socket(neighboringRouterIP, SMART_Client_Router_Port); // (videoServerIP, SMART_Server_Port);
+            String myIP = InetAddress.getLocalHost().getHostAddress();
+            Socket clientSocket = new Socket(neighboringRouterIP, SMART_Client_Router_Port);
             ObjectInputStream ins = new ObjectInputStream(clientSocket.getInputStream());
-            String command = "Request " + "2012.flv"; // + "\n";
-            //byte[] sendData = command.getBytes();
-            //DataOutputStream os = new DataOutputStream(clientSocket.getOutputStream());
-            //os.writeBytes(command);
-            //os.flush();
-            IPPortPair srcAddr = new IPPortPair(clientSocket.getLocalAddress().getHostAddress(), clientSocket.getLocalPort());
+            String command = "Request " + "2012.flv";
+            IPPortPair srcAddr = new IPPortPair(myIP, clientSocket.getLocalPort());
             IPPortPair destAddr = new IPPortPair(videoServerIP, 0);  // port is not used anyway
             SmartRequest request = new SmartRequest(srcAddr, destAddr, command);
             ObjectOutputStream objos = new ObjectOutputStream(clientSocket.getOutputStream());
@@ -59,6 +69,6 @@ public class SmartPlayer {
 
     public static void main(String[] args) {
         SmartPlayer smartPlayer = new SmartPlayer(args);
-        smartPlayer.requestVideo("2012-1.flv");
+        smartPlayer.requestVideo("2012.flv");
     }
 }
