@@ -28,24 +28,29 @@ class PacketHandler extends Thread {
                                 this.clientSocket.getInputStream()));  */
             ObjectOutputStream objos = new ObjectOutputStream(this.clientSocket.getOutputStream());
             ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
-            SmartPacket packet = SmartPacket.ReadPacket(objis);
-            if (packet != null) {
-                if (packet.getType() == PacketType.REQUEST) {
-                    SmartRequest request = (SmartRequest)packet;
-                    String command = request.getCommand();
-                    if (command != null) {
-                        System.out.println("Command: " + command);
-                        if (command.contains("Request")) {
-                            IContainer container = null;
-                            String[] splitted = command.split(" ");
-                            String filename = splitted[1];
+            while (true) {
+                SmartPacket packet = SmartPacket.ReadPacket(objis);
+                if (packet != null) {
+                    if (packet.getType() == PacketType.REQUEST) {
+                        SmartRequest request = (SmartRequest)packet;
+                        String command = request.getCommand();
+                        if (command != null) {
+                            System.out.println("Command: " + command);
+                            if (command.contains("Request")) {
+                                IContainer container = null;
+                                String[] splitted = command.split(" ");
+                                String filename = splitted[1];
 
-                            SmartFLVEncoder encoder = new SmartFLVEncoder(request, clientSocket, objos, this.rootFilePath + filename);
-                            encoder.startEncoding();
-
-                            this.clientSocket.close();
+                                SmartFLVEncoder encoder = new SmartFLVEncoder(request, clientSocket, objos, this.rootFilePath + filename);
+                                encoder.startEncoding();
+                            }
                         }
                     }
+                }
+                else if (objis == null) {
+                    // The connection between the video server and this particular neighboring router is lost
+                    // we quit this thread
+                    break;
                 }
             }
         }
@@ -55,7 +60,7 @@ class PacketHandler extends Thread {
     }
 }
 
-class TCPServer
+class TCPServer extends Thread
 {
     private ServerSocket serverSocket = null;
     private int myPort = 7999;
@@ -79,14 +84,14 @@ class TCPServer
     public ServerSocket getServerSocket() { return this.serverSocket; }
     public String getRootFilePath() { return this.rootFilePath; }
 
-    public void startServer() {
+    public void run() {
         while(true)
         {
             try {
                 new PacketHandler(serverSocket.accept(), this).start();
             }
             catch (Exception e) {
-                System.out.println("Failed to handle udp packets " + e.getMessage());
+                System.out.println("Failed to accept connections " + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -98,7 +103,7 @@ class TCPServer
 /**
  * Created by Ning Jiang on 9/2/14.
  */
-public class SmartServer {
+public class SmartServer extends Thread {
     private TCPServer tcpServer;
     private int Server_Port = 7999;
     private String rootFilePath = "c:\\Temp\\";
@@ -109,10 +114,24 @@ public class SmartServer {
            // read configuration file
        }
        tcpServer = new TCPServer(rootFilePath, Server_Port);
-       tcpServer.startServer();
+       tcpServer.start();
+    }
+
+    public void run()
+    {
+        while (true) {
+            try {
+                sleep(10000);
+            }
+            catch (Exception e) {
+                System.out.println("Failed to sleep on main thread " + e.getMessage());
+                break;
+            }
+        }
     }
 
     public static void main(String[] args) {
-       SmartServer smartServer = new SmartServer(args);
+        SmartServer smartServer = new SmartServer(args);
+        smartServer.start();
     }
 }

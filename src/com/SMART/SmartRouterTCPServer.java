@@ -25,6 +25,9 @@ class SmartRouterPacketHandler extends Thread
                 ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
                 while (true) {
                     SmartPacket packet = SmartPacket.ReadPacket(objis);
+                    // Received a packet from neighboring router,
+                    // we pass the packet to Smart Router to handle
+                    this.tcpServer.getSmartRouter().handlePacket(packet);
                 }
             }
         }
@@ -55,6 +58,8 @@ public class SmartRouterTCPServer extends Thread {
             e.printStackTrace();
         }
     }
+
+    public SmartRouter getSmartRouter() { return smartRouter; }
 
     public void run()
     {

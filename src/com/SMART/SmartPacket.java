@@ -36,6 +36,15 @@ public class SmartPacket implements Serializable {
     public IPPortPair getSourceIPPort() { return sourceIPPort; }
     public ArrayList<IPPortPair> getDestinationIPPorts() { return this.destinationIPPorts; }
 
+    public void setDestinations(ArrayList<IPPortPair> destinations) {
+        if (destinations != null) {
+            this.destinationIPPorts.clear();
+            for (int i = 0; i < destinations.size(); i++) {
+                this.destinationIPPorts.add(destinations.get(i));
+            }
+        }
+    }
+
     public static SmartPacket ReadPacket(ObjectInputStream objis)
     {
         if (objis == null)
@@ -52,6 +61,7 @@ public class SmartPacket implements Serializable {
         catch (Exception e) {
             System.out.println("Failed to read data from socket " + e.getMessage());
             e.printStackTrace();
+            objis = null;
             return null;
         }
     }

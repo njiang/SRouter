@@ -151,7 +151,7 @@ public class SmartFLVEncoder
             container.close();
             container = null;
         }
-        closeJavaWindow();
+        //closeJavaWindow();
 
     }
 

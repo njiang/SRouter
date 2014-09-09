@@ -13,11 +13,13 @@ class ClientPacketHandler extends Thread
 {
     ClientFacingTCPServer tcpServer;
     Socket clientSocket;
+    IPPortPair clientIPPortPair;
 
-    public ClientPacketHandler(ClientFacingTCPServer server, Socket clientSocket)
+    public ClientPacketHandler(ClientFacingTCPServer server, Socket clientSocket, IPPortPair ipinfo)
     {
         this.tcpServer = server;
         this.clientSocket = clientSocket;
+        this.clientIPPortPair = ipinfo;
     }
 
     public void run()
@@ -33,6 +35,7 @@ class ClientPacketHandler extends Thread
         catch (Exception e) {
             System.out.println("Failed to process client facing socket " + e.getMessage());
             e.printStackTrace();
+            this.tcpServer.removeClientSocket(this.clientIPPortPair);
         }
     }
 }
@@ -79,7 +82,7 @@ public class ClientFacingTCPServer extends Thread
                 ObjectOutputStream objos = new ObjectOutputStream(clientSocket.getOutputStream());
                 // Save the client socket for later reference
                 socketMap.put(pair, objos);
-                ClientPacketHandler clientPacketHandler = new ClientPacketHandler(this, clientSocket);
+                ClientPacketHandler clientPacketHandler = new ClientPacketHandler(this, clientSocket, pair);
                 clientPacketHandler.start();
             }
         }
@@ -87,6 +90,12 @@ public class ClientFacingTCPServer extends Thread
             System.out.println("Error processing client facing server socket " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    public void removeClientSocket(IPPortPair pair)
+    {
+        if (socketMap.containsKey(pair))
+            socketMap.remove(pair);
     }
 
     /**
@@ -104,18 +113,16 @@ public class ClientFacingTCPServer extends Thread
                         if (objos != null) {
                             try {
                                 objos.writeObject(packet);
-                                objos.reset();
+                                //objos.reset();
+                                System.out.println("Forwarded packet to client app " + dest.getIPAddress() + " " + dest.getPort());
                             }
                             catch (Exception e) {
                                 System.out.println("Failed to process packet for " + dest.getIPAddress() + " " + dest.getPort() + " " + e.getMessage());
                                 e.printStackTrace();
+                                if (this.socketMap.containsKey(dest))
+                                    this.socketMap.remove(dest);
                             }
                         }
-                    }
-                    else {
-                        // TODO
-                        // We need to forward the packet to the router closer to the client app
-                        // based on our routing algorithm
                     }
                 }
             }
