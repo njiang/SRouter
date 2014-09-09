@@ -47,7 +47,7 @@ class PacketHandler extends Thread {
                         }
                     }
                 }
-                else if (objis == null) {
+                else {
                     // The connection between the video server and this particular neighboring router is lost
                     // we quit this thread
                     break;

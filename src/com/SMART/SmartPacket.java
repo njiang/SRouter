@@ -59,9 +59,9 @@ public class SmartPacket implements Serializable {
             return (SmartPacket)objis.readObject();
         }
         catch (Exception e) {
+            objis = null;
             System.out.println("Failed to read data from socket " + e.getMessage());
             e.printStackTrace();
-            objis = null;
             return null;
         }
     }

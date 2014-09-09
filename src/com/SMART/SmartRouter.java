@@ -182,6 +182,9 @@ public class SmartRouter extends Thread {
     public void handlePacket(SmartPacket packet)
     {
         try {
+            if (packet == null)
+                return;
+
             if (packet.getType() == PacketType.REQUEST) {
                 SmartRequest request = (SmartRequest)packet;
                 String command = request.getCommand();

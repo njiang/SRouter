@@ -28,8 +28,12 @@ class ClientPacketHandler extends Thread
             if (this.clientSocket != null) {
                 ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
                 SmartPacket packet = SmartPacket.ReadPacket(objis);
-                // process the packet received from client apps
-                this.tcpServer.getSmartRouter().handlePacket(packet);
+                if (packet == null)
+                    // something is wrong with the client, we remove it from the hashmap
+                    this.tcpServer.removeClientSocket(this.clientIPPortPair);
+                else
+                    // process the packet received from client apps
+                    this.tcpServer.getSmartRouter().handlePacket(packet);
             }
         }
         catch (Exception e) {
