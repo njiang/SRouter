@@ -1,4 +1,4 @@
-package com.SMART;
+package com.SRouter;
 
 import com.xuggle.xuggler.*;
 import com.xuggle.xuggler.demos.VideoImage;
