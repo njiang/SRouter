@@ -1,10 +1,14 @@
 package com.SRouter;
 
+import sun.net.util.IPAddressUtil;
+
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -23,28 +27,29 @@ class NeighboringRouterStarter extends Thread
 
     public void run()
     {
-        int retries = 0;
         Socket smartNodeSocket = null;
-        while (smartNodeSocket == null && retries < 5) {
-            try {
-                smartNodeSocket = new Socket(routerIP, port);
+        try {
+            // This thread constantly verifies whether a connection to a neighboring router is established.
+            // If not, it tries to connect
+            while (true) {
+                if (!this.smartRouter.routerStarted(this.routerIP)) {
+                    try {
+                        smartNodeSocket = new Socket(routerIP, port);
+                    }
+                    catch (Exception e) {
+                        System.out.println("Failed to connect to neighboring router " + routerIP + " " + e.getMessage());
+                    }
+
+                    if (smartNodeSocket != null) {
+                        this.smartRouter.setNeighboringRouter(routerIP, smartNodeSocket);
+                    }
+                }
+                sleep(5000);
             }
-            catch (Exception e) {
-                System.out.println("Failed to connect to neighboring router " + routerIP + " " + e.getMessage());
-            }
-            if (smartNodeSocket != null)
-                break;
-            try {
-                sleep(5000); //  wait a little bit and connect again
-            }
-            catch (Exception e) {
-                System.out.println("Waiting on connecting to neighboring router error " + e.getMessage());
-                break;
-            }
-            retries++;
         }
-        if (smartNodeSocket != null) {
-            this.smartRouter.setNeighboringRouter(routerIP, smartNodeSocket);
+        catch (Exception e) {
+            System.out.println("Neighboring router starting thread failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
@@ -72,7 +77,7 @@ public class SmartRouter extends Thread {
     public SmartRouter(String[] args)
     {
         try {
-            myIP = InetAddress.getLocalHost().getHostAddress();
+            myIP = getMyIP();
         }
         catch (Exception e) {
             System.out.println("Failed to get local IP address");
@@ -112,6 +117,52 @@ public class SmartRouter extends Thread {
         }
         catch(Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private String getMyIP()
+    {
+
+        try {
+            String myIP = InetAddress.getLocalHost().getHostAddress();
+            Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
+            while (nics.hasMoreElements()) {
+                NetworkInterface nic = nics.nextElement();
+                Enumeration<InetAddress> addresses = nic.getInetAddresses();
+                if (nic.isLoopback()) {
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        if (IPAddressUtil.isIPv4LiteralAddress(addr.getHostAddress())) {
+                            myIP = addr.getHostAddress();
+                            break;
+                        }
+                    }
+                }
+                else {
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        if (IPAddressUtil.isIPv4LiteralAddress(addr.getHostAddress()))
+                            return addr.getHostAddress();
+                    }
+                }
+            }
+            return myIP;
+        }
+        catch (Exception e) {
+            System.out.println("Failed to get IP address " + e.getMessage());
+        }
+        return "127.0.0.1";
+    }
+
+    public boolean routerStarted(String IPAddr) {
+        return (this.neighborOutputStreams.containsKey(IPAddr));
+    }
+
+    public void clearNeighboringRouter(String IPAddr)
+    {
+        if (this.neighborOutputStreams.containsKey(IPAddr)) {
+            this.neighborOutputStreams.remove(IPAddr);
+            this.neighborSockets.remove(IPAddr);
         }
     }
 
@@ -270,6 +321,8 @@ public class SmartRouter extends Thread {
                         }
                         catch (Exception e) {
                             System.out.println("Failed to forward packet to " + key);
+                            // We need to clear the hashmap
+                            this.clearNeighboringRouter(key);
                         }
                     }
                 }
