@@ -81,7 +81,7 @@ public class ClientFacingTCPServer extends Thread
                 // If client is on the same machine, we use host address instead
                 // since we use host address in routing table
                 if (socketAddr.equals("127.0.0.1"))
-                    socketAddr = InetAddress.getLocalHost().getHostAddress();
+                    socketAddr = SmartRouter.getMyIP();
                 IPPortPair pair = new IPPortPair(socketAddr, clientSocket.getPort());
                 ObjectOutputStream objos = new ObjectOutputStream(clientSocket.getOutputStream());
                 // Save the client socket for later reference

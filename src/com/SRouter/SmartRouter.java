@@ -120,7 +120,7 @@ public class SmartRouter extends Thread {
         }
     }
 
-    private String getMyIP()
+    public static String getMyIP()
     {
 
         try {
