@@ -5,12 +5,16 @@
 
 package com.SRouter;
 
+import sun.net.util.IPAddressUtil;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.Socket;
+import java.util.Enumeration;
 
 
 public class SmartPlayer {
@@ -20,7 +24,7 @@ public class SmartPlayer {
     private String videoServerIP = "127.0.0.1";
     private String myIP = "127.0.0.1";
     private String videoFileName = "2012.flv";
-    private String videoFilePath = "C:\\Temp\\";
+    private String videoFilePath = "/Users/njiang/github/SRouter/SRouter/src/";
 
     public SmartPlayer(String[] args) {
         if (args.length > 0) {
@@ -47,7 +51,7 @@ public class SmartPlayer {
 
     public void requestVideo(String fileName) {
         try {
-            String myIP = InetAddress.getLocalHost().getHostAddress();
+            String myIP = getMyIP();
             Socket clientSocket = new Socket(neighboringRouterIP, SMART_Client_Router_Port);
             ObjectInputStream ins = new ObjectInputStream(clientSocket.getInputStream());
             String command = "Request " + "2012.flv";
@@ -65,6 +69,41 @@ public class SmartPlayer {
             e.printStackTrace();
         }
     }
+
+    private String getMyIP()
+    {
+
+        try {
+            String myIP = InetAddress.getLocalHost().getHostAddress();
+            Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
+            while (nics.hasMoreElements()) {
+                NetworkInterface nic = nics.nextElement();
+                Enumeration<InetAddress> addresses = nic.getInetAddresses();
+                if (nic.isLoopback()) {
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        if (IPAddressUtil.isIPv4LiteralAddress(addr.getHostAddress())) {
+                            myIP = addr.getHostAddress();
+                            break;
+                        }
+                    }
+                }
+                else {
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        if (IPAddressUtil.isIPv4LiteralAddress(addr.getHostAddress()))
+                            return addr.getHostAddress();
+                    }
+                }
+            }
+            return myIP;
+        }
+        catch (Exception e) {
+            System.out.println("Failed to get IP address " + e.getMessage());
+        }
+        return "127.0.0.1";
+    }
+
 
 
     public static void main(String[] args) {
