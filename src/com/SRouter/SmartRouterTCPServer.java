@@ -10,11 +10,13 @@ class SmartRouterPacketHandler extends Thread
 {
     SmartRouterTCPServer tcpServer;
     Socket clientSocket;
+    String clientIP;
 
     public SmartRouterPacketHandler(SmartRouterTCPServer server, Socket clientSocket)
     {
         this.tcpServer = server;
         this.clientSocket = clientSocket;
+        this.clientIP = clientSocket.getInetAddress().getHostAddress();
     }
 
     public void run()
@@ -25,8 +27,12 @@ class SmartRouterPacketHandler extends Thread
                 ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
                 while (true) {
                     SmartPacket packet = SmartPacket.ReadPacket(objis);
-                    if (packet == null)
+                    if (packet == null) {
+                        // Connection to neighboring router failed. We need to clean the hashmap
+                        // and reestablish the connection by NeighboringRouterStarter
+                        this.tcpServer.getSmartRouter().clearNeighboringRouter(this.clientIP);
                         break;
+                    }
                     else
                         // Received a packet from neighboring router,
                         // we pass the packet to Smart Router to handle
