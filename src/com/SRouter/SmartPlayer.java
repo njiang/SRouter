@@ -29,6 +29,7 @@ public class SmartPlayer {
     public SmartPlayer(String[] args) {
         if (args.length > 0) {
             String configFilePath = args[0];
+            int linenum = 0;
             try {
                 FileReader freader = new FileReader(configFilePath);
                 BufferedReader reader = new BufferedReader(freader);
@@ -37,11 +38,19 @@ public class SmartPlayer {
                     if (line == null)
                         break;
                     if (!line.isEmpty()) {
-                        neighboringRouterIP = line;
-                        break;
+                        if (linenum == 0)
+                            neighboringRouterIP = line;
+                        else if (linenum == 1)
+                            videoFilePath = line;
+                        else if (linenum == 2)
+                            videoServerIP = line;
+                        else
+                            break;
+                        linenum++;
                     }
                 }
                 while (true);
+                freader.close();
             }
             catch (Exception e) {
                 System.out.println("Failed to open configuration file " + e.getMessage());
