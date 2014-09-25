@@ -24,7 +24,7 @@ public class SmartPlayer {
     private String videoServerIP = "127.0.0.1";
     private String myIP = "127.0.0.1";
     private String videoFileName = "2012.flv";
-    private String videoFilePath = "/Users/njiang/github/SRouter/SRouter/src/";
+    private String videoFilePath = "c:\\temp\\";
 
     public SmartPlayer(String[] args) {
         if (args.length > 0) {

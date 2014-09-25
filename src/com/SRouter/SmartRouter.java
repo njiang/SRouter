@@ -78,6 +78,7 @@ public class SmartRouter extends Thread {
     {
         try {
             myIP = getMyIP();
+            System.out.println("**** Router IP: " + myIP + " ******");
         }
         catch (Exception e) {
             System.out.println("Failed to get local IP address");
@@ -106,12 +107,14 @@ public class SmartRouter extends Thread {
             }
 
             // Establish connections to neighboring routers
-            for (int i = 0; i < neighborIPs.size(); i++) {
-                String addr = neighborIPs.get(i);
-                if (!addr.equals(myIP))
-                {
-                    NeighboringRouterStarter neighboringRouterStarter = new NeighboringRouterStarter(this, addr, Smart_Node_Port);
-                    neighboringRouterStarter.start();
+            if (neighborIPs != null) {
+                for (int i = 0; i < neighborIPs.size(); i++) {
+                    String addr = neighborIPs.get(i);
+                    if (!addr.equals(myIP))
+                    {
+                        NeighboringRouterStarter neighboringRouterStarter = new NeighboringRouterStarter(this, addr, Smart_Node_Port);
+                        neighboringRouterStarter.start();
+                    }
                 }
             }
         }

@@ -121,7 +121,7 @@ public class SmartFLVEncoder
 
                 // somehow the streamindex is not preserved during data transmission, we record it in the SmartDataPacket
                 SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes, packet.getStreamIndex());
-                System.out.println("Packet " + count + " Size: " + numBytes + " Stream index " + packet.getStreamIndex());
+                System.out.println("Packet " + count + " Size: " + numBytes + " Stream index " + packet.getStreamIndex() + " for " + dest.getIPAddress());
                 socketOutputStream.writeObject(dataPacket);
                 socketOutputStream.reset();
                 count++;

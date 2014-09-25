@@ -35,6 +35,7 @@ public class SmartPacket implements Serializable {
     public PacketType getType() { return myType; }
     public IPPortPair getSourceIPPort() { return sourceIPPort; }
     public ArrayList<IPPortPair> getDestinationIPPorts() { return this.destinationIPPorts; }
+    public void setSourceIPPort(IPPortPair src) {this.sourceIPPort = src;}
 
     public void setDestinations(ArrayList<IPPortPair> destinations) {
         if (destinations != null) {

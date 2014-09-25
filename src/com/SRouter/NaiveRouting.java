@@ -27,8 +27,10 @@ public class NaiveRouting implements ISmartRouting {
                     break;
 
                 Vertex src = new Vertex(line, line);
-                if (line.equals(myIP))
+                if (line.equals(myIP)) {
+                    System.out.println("Found my IP!");
                     self = src;
+                }
 
                 String adjancencies = reader.readLine(); // neighboring nodes delimited by space
                 if (adjancencies == null)
@@ -39,12 +41,14 @@ public class NaiveRouting implements ISmartRouting {
                     String addr = splitted[i];
                     if (splitted[i].startsWith("**")) {
                         addr = splitted[i].substring(2);
+                        System.out.println("Video server IP: " + addr);
                         routingTable.setServerIP(addr);
                     }
 
                     Vertex dest = new Vertex(addr, addr);
                     // In Naive routing edges are undirected with unit weight
                     if (!src.equals(dest)) {
+                        System.out.println("Edge " + src.getId() + " " + dest.getId());
                         routingTable.addEdge(src, dest, 1);
                         routingTable.addEdge(dest, src, 1);
                     }
@@ -58,7 +62,7 @@ public class NaiveRouting implements ISmartRouting {
             routingTable.runDijkstra(self);
 
             // Test
-            Vertex server = new Vertex(routingTable.getServerIP(), routingTable.getServerIP());
+            /*Vertex server = new Vertex(routingTable.getServerIP(), routingTable.getServerIP());
             LinkedList<Vertex> path = routingTable.getShortestPath(server);
             if (path != null) {
                 for (Vertex v: path) {
@@ -91,7 +95,7 @@ public class NaiveRouting implements ISmartRouting {
                 for (Vertex v: path) {
                     System.out.print(v.getId() + "->");
                 }
-            }
+            } */
         }
         catch (Exception e) {
             System.out.println("Failed to read configuration file " + e.getMessage());

@@ -35,7 +35,7 @@ class PacketHandler extends Thread {
                         SmartRequest request = (SmartRequest)packet;
                         String command = request.getCommand();
                         if (command != null) {
-                            System.out.println("Command: " + command);
+                            System.out.println("Command: " + command + " from " + request.getDestinationIPPorts().get(0).getIPAddress());
                             if (command.contains("Request")) {
                                 IContainer container = null;
                                 String[] splitted = command.split(" ");
@@ -112,6 +112,26 @@ public class SmartServer extends Thread {
        if (args.length > 0) {
            // TODO
            // read configuration file
+           try {
+               FileReader fileReader = new FileReader(args[0]);
+               BufferedReader reader = new BufferedReader(fileReader);
+               int linenum = 0;
+               do {
+                   String line = reader.readLine(); // source node
+                   if (line == null)
+                       break;
+                   if (linenum == 0) {
+                       System.out.println("Video root file " + line);
+                       rootFilePath = line;
+                   }
+                   linenum++;
+               }
+               while(true);
+               fileReader.close();
+           }
+           catch (Exception e) {
+               System.out.println("Failed to open configuration file " + e.getMessage());
+           }
        }
        tcpServer = new TCPServer(rootFilePath, Server_Port);
        tcpServer.start();

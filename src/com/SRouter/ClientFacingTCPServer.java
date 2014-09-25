@@ -2,7 +2,6 @@ package com.SRouter;
 
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -31,9 +30,19 @@ class ClientPacketHandler extends Thread
                 if (packet == null)
                     // something is wrong with the client, we remove it from the hashmap
                     this.tcpServer.removeClientSocket(this.clientIPPortPair);
-                else
+                else  {
                     // process the packet received from client apps
+                    if (packet.getType() == PacketType.REQUEST) {
+                        // In the deployment scenario of EC2 nodes as router and local computer as player,
+                        // we need to set the destination info to the public IP address of the client.
+                        // This is because client might only have private IP addresses behind NAT,
+                        // and we need to set the destination IP of the SmartRequest to its public address
+                        packet.setSourceIPPort(this.clientIPPortPair);
+                        System.out.println("Set request source to " + this.clientIPPortPair.getIPAddress());
+
+                    }
                     this.tcpServer.getSmartRouter().handlePacket(packet);
+                }
             }
         }
         catch (Exception e) {
@@ -82,6 +91,7 @@ public class ClientFacingTCPServer extends Thread
                 // since we use host address in routing table
                 if (socketAddr.equals("127.0.0.1"))
                     socketAddr = SmartRouter.getMyIP();
+                System.out.println("====== Received Connection from Client IP address: " + socketAddr);
                 IPPortPair pair = new IPPortPair(socketAddr, clientSocket.getPort());
                 ObjectOutputStream objos = new ObjectOutputStream(clientSocket.getOutputStream());
                 // Save the client socket for later reference
@@ -112,6 +122,7 @@ public class ClientFacingTCPServer extends Thread
             if (dests != null) {
                 for (int i = 0; i < dests.size(); i++) {
                     IPPortPair dest = dests.get(i);
+                    System.out.println("Client facing tcp server handling packet for " + dest.getIPAddress());
                     if (socketMap.containsKey(dest)) {
                         ObjectOutputStream objos = socketMap.get(dest);
                         if (objos != null) {
