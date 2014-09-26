@@ -54,6 +54,62 @@ class NeighboringRouterStarter extends Thread
     }
 }
 
+// This class manages connection with a neighboring video server
+// If the connection is lost, it tries to reconnect
+class VideoServerConnectionManager extends Thread
+{
+    private String serverIP;
+    private int port;
+    private SmartRouter smartRouter;
+    ObjectInputStream vsis;
+
+    public VideoServerConnectionManager(SmartRouter sr, String serverIP, int port)
+    {
+        this.serverIP = serverIP;
+        this.port = port;
+        this.smartRouter = sr;
+    }
+
+    public void run()
+    {
+        try {
+            while (true) {
+               if (!smartRouter.videoServerConnected(this.serverIP)) {
+                   try {
+                       System.out.println("Router connecting to video server " + this.serverIP);
+                       Socket videoServerSocket = new Socket(this.serverIP, this.port);
+                       ObjectOutputStream vsos = new ObjectOutputStream(videoServerSocket.getOutputStream());
+                       vsis = new ObjectInputStream(videoServerSocket.getInputStream());
+                       smartRouter.setVideoServerInfo(this.serverIP, videoServerSocket, vsos, vsis);
+                   }
+                   catch (Exception e) {
+                       System.out.println("Failed to connect to video server " + this.serverIP + ": " + e.getMessage());
+                   }
+               }
+
+               if (vsis != null) {
+                   try {
+                       SmartPacket packet = (SmartPacket)vsis.readObject();
+                       if (packet.getType() == PacketType.DATA) {
+                           // Process by Smart Router
+                           this.smartRouter.handlePacket(packet);
+                       }
+                   }
+                   catch (Exception e) {
+                       System.out.println("Failed to read packet from server " + this.serverIP + " " + e.getMessage());
+                       this.smartRouter.clearNeighboringVideoServer(this.serverIP);
+                   }
+               }
+               else
+                   sleep(5000);
+            }
+        }
+        catch (Exception e) {
+            System.out.println("Video server connection manager for " + this.serverIP + " failed: " + e.getMessage());
+        }
+    }
+}
+
 public class SmartRouter extends Thread {
     private int Server_Port = 7999;
     private int Smart_Client_Facing_Port = 8999;
@@ -63,12 +119,17 @@ public class SmartRouter extends Thread {
     private SmartRouterTCPServer routerTCPServer; // tcp server interacts with neighboring SMART nodes
 
     private String[] neighborIPs;
-    private Socket videoServerSocket; // socket connecting to the video server if applicable
-    private ObjectOutputStream videoServerOutputStream;
-    private ObjectInputStream videoServerInputStream;
+
+    // Sockets and io streams to neighboring video servers
+    private ConcurrentHashMap<String, Socket> videoServerSockets = new ConcurrentHashMap<String, Socket>(); // socket connecting to the video server if applicable
+    private ConcurrentHashMap<String, ObjectOutputStream> videoServerOutputStreams = new ConcurrentHashMap<String, ObjectOutputStream>();
+    private ConcurrentHashMap<String, ObjectInputStream> videoServerInputStreams = new ConcurrentHashMap<String, ObjectInputStream>();
+
+    // Sockets and output streams with neighboring routers
     private ConcurrentHashMap<String, Socket> neighborSockets = new ConcurrentHashMap<String, Socket>();
     private ConcurrentHashMap<String, ObjectOutputStream> neighborOutputStreams
             = new ConcurrentHashMap<String, ObjectOutputStream>();
+
     private SmartBufferManager smartBufferManager;
     private NaiveRouting routingModule;
     private String myIP;
@@ -100,10 +161,13 @@ public class SmartRouter extends Thread {
             routerTCPServer = new SmartRouterTCPServer(this, Smart_Node_Port);
             routerTCPServer.start();
 
-            if (routingModule.isNeighboringToServer()) {
+            ArrayList<String> neighboringServers = routingModule.getServerIPs();
+            if (neighboringServers != null) {
+                for (String serverIP : neighboringServers) {
 
-                videoServerSocket = new Socket(routingModule.getServerIP(), Server_Port);
-                videoServerOutputStream = new ObjectOutputStream(videoServerSocket.getOutputStream());
+                    VideoServerConnectionManager vscm = new VideoServerConnectionManager(this, serverIP, Server_Port);
+                    vscm.start();
+                }
             }
 
             // Establish connections to neighboring routers
@@ -157,6 +221,18 @@ public class SmartRouter extends Thread {
         return "127.0.0.1";
     }
 
+    public boolean videoServerConnected(String IPAddr) {
+        return (this.videoServerSockets.containsKey(IPAddr));
+    }
+
+    public void clearNeighboringVideoServer(String IPAddr) {
+        if (this.videoServerSockets.containsKey(IPAddr)) {
+            this.videoServerSockets.remove(IPAddr);
+            this.videoServerOutputStreams.remove(IPAddr);
+            this.videoServerInputStreams.remove(IPAddr);
+        }
+    }
+
     public boolean routerStarted(String IPAddr) {
         return (this.neighborOutputStreams.containsKey(IPAddr));
     }
@@ -166,6 +242,15 @@ public class SmartRouter extends Thread {
         if (this.neighborOutputStreams.containsKey(IPAddr)) {
             this.neighborOutputStreams.remove(IPAddr);
             this.neighborSockets.remove(IPAddr);
+        }
+    }
+
+    public void setVideoServerInfo(String serverIP, Socket socket, ObjectOutputStream os, ObjectInputStream ois)
+    {
+        if (serverIP != null && socket != null && os != null && ois != null) {
+            this.videoServerSockets.put(serverIP, socket);
+            this.videoServerInputStreams.put(serverIP, ois);
+            this.videoServerOutputStreams.put(serverIP, os);
         }
     }
 
@@ -193,31 +278,9 @@ public class SmartRouter extends Thread {
         try {
             while(true) {
                 try {
-
-                    if (videoServerInputStream == null && videoServerSocket != null)
-                        videoServerInputStream = new ObjectInputStream(videoServerSocket.getInputStream());
-                    if (videoServerInputStream != null) {
-                        SmartPacket packet = (SmartPacket)videoServerInputStream.readObject();
-                        if (packet.getType() == PacketType.DATA) {
-                            // Process by Smart Router
-                            this.handlePacket(packet);
-
-                        }
-                    }
-                    if (videoServerInputStream == null)  {
-                        sleep(5000);
-                        if (retryVideoServerSocket) {
-                            videoServerSocket = new Socket(this.routingModule.getServerIP(), this.Server_Port);
-                            videoServerOutputStream = new ObjectOutputStream(videoServerSocket.getOutputStream());
-                            System.out.println("Reconnected to the video server!");
-                        }
-                    }
+                    sleep(5000);
                 }
                 catch (Exception e) {
-                    System.out.println("Failed to read packet from video server " + e.getMessage());
-                    videoServerInputStream = null;
-                    videoServerSocket = null;
-                    retryVideoServerSocket = true;
                 }
             }
         }
@@ -244,15 +307,17 @@ public class SmartRouter extends Thread {
                 String command = request.getCommand();
                 if (command.toLowerCase().contains("request")) {
                     // This is a video request
-                    if (videoServerSocket != null) {
+                    IPPortPair dest = request.getDestinationIPPorts().get(0);
+                    System.out.println("Received request to server " + dest.getIPAddress());
+                    if (this.videoServerConnected(dest.getIPAddress())) {
                         try {
-                            videoServerOutputStream.writeObject(packet);
+                            ObjectOutputStream oos = this.videoServerOutputStreams.get(dest.getIPAddress());
+                            if (oos != null)
+                                oos.writeObject(packet);
                         }
                         catch (Exception e0) {
                             System.out.println("Failed to send to video server " + e0.getMessage());
-                            this.videoServerInputStream = null;
-                            this.videoServerSocket = null;
-                            this.retryVideoServerSocket = true;
+                            this.clearNeighboringVideoServer(dest.getIPAddress());
                         }
                     }
                     else {

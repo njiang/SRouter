@@ -42,7 +42,10 @@ public class NaiveRouting implements ISmartRouting {
                     if (splitted[i].startsWith("**")) {
                         addr = splitted[i].substring(2);
                         System.out.println("Video server IP: " + addr);
-                        routingTable.setServerIP(addr);
+
+                        if (self != null)
+                            // Add a neighboring video server
+                            routingTable.setServerIP(addr);
                     }
 
                     Vertex dest = new Vertex(addr, addr);
@@ -103,17 +106,12 @@ public class NaiveRouting implements ISmartRouting {
         }
     }
 
-    public boolean isNeighboringToServer()
-    {
-        return routingTable.isNeighboringNode(myIP, routingTable.getServerIP());
-    }
-
     public ArrayList<String> getNeighboringRouters(String src)
     {
         return routingTable.getNeighboringNodes(src);
     }
 
-    public String getServerIP() { return routingTable.getServerIP();}
+    public ArrayList<String> getServerIPs() { return routingTable.getNeighboringServerIPs();}
 
     @Override
     public SmartRoute nextHop(String destinationIP, SmartRoutingContext context) {

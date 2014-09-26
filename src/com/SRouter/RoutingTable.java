@@ -13,7 +13,7 @@ public class RoutingTable {
     HashMap<String, ArrayList<String>> edges = new HashMap<String, ArrayList<String>>();
 
     Graph routingTable = new Graph();
-    String serverIP;
+    ArrayList<String> neighboringServerIPs = new ArrayList<String>();
     DijkstraAlgorithm dijkstraAlgorithm;
 
     public RoutingTable()
@@ -21,8 +21,8 @@ public class RoutingTable {
 
     }
 
-    public void setServerIP(String serverIP) { this.serverIP = serverIP; }
-    public String getServerIP() { return serverIP; }
+    public void setServerIP(String serverIP) { this.neighboringServerIPs.add(serverIP); }
+    public ArrayList<String> getNeighboringServerIPs() { return neighboringServerIPs; }
 
     // Edge is directed
     public void addEdge(Vertex src, Vertex dest, int weight)
