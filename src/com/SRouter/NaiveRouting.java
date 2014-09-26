@@ -18,6 +18,7 @@ public class NaiveRouting implements ISmartRouting {
         // Read the network graph from a configuration file
         this.myIP = myIP;
         routingTable = new RoutingTable();
+        boolean processingMyAdjancencies = false;
         try {
             FileReader fileReader = new FileReader(configFile);
             BufferedReader reader = new BufferedReader(fileReader);
@@ -30,7 +31,10 @@ public class NaiveRouting implements ISmartRouting {
                 if (line.equals(myIP)) {
                     System.out.println("Found my IP!");
                     self = src;
+                    processingMyAdjancencies = true;
                 }
+                else
+                    processingMyAdjancencies = false;
 
                 String adjancencies = reader.readLine(); // neighboring nodes delimited by space
                 if (adjancencies == null)
@@ -43,7 +47,7 @@ public class NaiveRouting implements ISmartRouting {
                         addr = splitted[i].substring(2);
                         System.out.println("Video server IP: " + addr);
 
-                        if (self != null)
+                        if (processingMyAdjancencies)
                             // Add a neighboring video server
                             routingTable.setServerIP(addr);
                     }
@@ -108,7 +112,22 @@ public class NaiveRouting implements ISmartRouting {
 
     public ArrayList<String> getNeighboringRouters(String src)
     {
-        return routingTable.getNeighboringNodes(src);
+        // Video server cannot be a router at the same time. So we need to remove them from
+        // neighboring router list
+        ArrayList<String> neighbors = routingTable.getNeighboringNodes(src);
+        ArrayList<String> neighboringServers = routingTable.getNeighboringServerIPs();
+        if (neighbors != null) {
+            if (neighboringServers != null) {
+                for (String neighbor : neighbors) {
+                    if (neighboringServers.contains(neighbor))
+                        neighbors.remove(neighbor);
+                }
+                return neighbors;
+            }
+            else
+                return neighbors;
+        }
+        return null;
     }
 
     public ArrayList<String> getServerIPs() { return routingTable.getNeighboringServerIPs();}
