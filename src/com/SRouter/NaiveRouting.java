@@ -3,6 +3,7 @@ package com.SRouter;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 
 /**
@@ -114,13 +115,15 @@ public class NaiveRouting implements ISmartRouting {
     {
         // Video server cannot be a router at the same time. So we need to remove them from
         // neighboring router list
-        ArrayList<String> neighbors = routingTable.getNeighboringNodes(src);
+        ArrayList<String> neighbors = new ArrayList(routingTable.getNeighboringNodes(src));
         ArrayList<String> neighboringServers = routingTable.getNeighboringServerIPs();
         if (neighbors != null) {
             if (neighboringServers != null) {
-                for (String neighbor : neighbors) {
-                    if (neighboringServers.contains(neighbor))
-                        neighbors.remove(neighbor);
+                for (Iterator<String> it = neighbors.iterator(); it.hasNext(); ) {
+                    String neighbor = it.next();
+                    if (neighboringServers.contains(neighbor)) {
+                        it.remove();
+                    }
                 }
                 return neighbors;
             }
