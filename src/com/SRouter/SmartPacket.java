@@ -46,6 +46,15 @@ public class SmartPacket implements Serializable {
         }
     }
 
+    public void setDestinations(IPPortPair[] destinations) {
+        if (destinations != null) {
+            this.destinationIPPorts.clear();
+            for (int i = 0; i < destinations.length; i++) {
+                this.destinationIPPorts.add(destinations[i]);
+            }
+        }
+    }
+
     public static SmartPacket ReadPacket(ObjectInputStream objis)
     {
         if (objis == null)

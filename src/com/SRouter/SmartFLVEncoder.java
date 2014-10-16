@@ -4,7 +4,6 @@ import com.xuggle.xuggler.*;
 import com.xuggle.xuggler.demos.VideoImage;
 
 import java.awt.image.BufferedImage;
-import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 
@@ -16,13 +15,14 @@ import java.net.Socket;
  * @author aclarke
  *
  */
-public class SmartFLVEncoder
+public class SmartFLVEncoder extends Thread
 {
     IContainer container = null;
     String encodeFileName = "";
     Socket clientSocket = null;
     ObjectOutputStream socketOutputStream = null;
     SmartRequest requestPacket;
+    SmartServer server;
 
     /**
      * Takes a media container (file) as the first argument, opens it,
@@ -32,11 +32,13 @@ public class SmartFLVEncoder
      * @param filename Must contain the full path of that file that needs to be encoded
      */
     @SuppressWarnings("deprecation")
-    public SmartFLVEncoder(SmartRequest request, Socket clientSocket, ObjectOutputStream objos, String filename)
+    public SmartFLVEncoder(SmartServer server, SmartRequest request, Socket clientSocket, ObjectOutputStream objos, String filename)
+
     {
         this.requestPacket = request;
         this.encodeFileName = filename;
         this.clientSocket = clientSocket;
+        this.server = server;
 
         // Let's make sure that we can actually convert video pixel formats.
         if (!IVideoResampler.isSupported(
@@ -60,98 +62,166 @@ public class SmartFLVEncoder
         }
     }
 
-    public void startEncoding() throws IOException {
+    public void run() {
 
         if (socketOutputStream == null)
             return;
 
-        // Open up the container
-        // query how many streams the call to open found
-        int numStreams = container.getNumStreams();
+        if (this.server.isPacketBufferEmpty()) {
+            System.out.println("Start streaming...");
+            // Open up the container
+            // query how many streams the call to open found
+            int numStreams = container.getNumStreams();
 
-        // and iterate through the streams to find the first video stream
-        int videoStreamId = -1;
-        IStreamCoder videoCoder = null;
-        int audioStreamId = -1;
-        IStreamCoder audioCoder = null;
-        for(int i = 0; i < numStreams; i++)
-        {
-            // Find the stream object
-            IStream stream = container.getStream(i);
-            // Get the pre-configured decoder that can decode this stream;
-            IStreamCoder coder = stream.getStreamCoder();
-
-            if (videoStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_VIDEO)
+            // and iterate through the streams to find the first video stream
+            int videoStreamId = -1;
+            IStreamCoder videoCoder = null;
+            int audioStreamId = -1;
+            IStreamCoder audioCoder = null;
+            for(int i = 0; i < numStreams; i++)
             {
-                videoStreamId = i;
-                videoCoder = coder;
+                // Find the stream object
+                IStream stream = container.getStream(i);
+                // Get the pre-configured decoder that can decode this stream;
+                IStreamCoder coder = stream.getStreamCoder();
+
+                if (videoStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_VIDEO)
+                {
+                    videoStreamId = i;
+                    videoCoder = coder;
+                }
+                else if (audioStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_AUDIO)
+                {
+                    audioStreamId = i;
+                    audioCoder = coder;
+                }
             }
-            else if (audioStreamId == -1 && coder.getCodecType() == ICodec.Type.CODEC_TYPE_AUDIO)
-            {
-                audioStreamId = i;
-                audioCoder = coder;
-            }
-        }
-        if (videoStreamId == -1)
-            throw new RuntimeException("could not find video stream in container: "
-            );
+            if (videoStreamId == -1)
+                throw new RuntimeException("could not find video stream in container: "
+                );
 
-    /*
-     * Now, we start walking through the container looking at each packet.
-     */
-        IPacket packet = IPacket.make();
-        long firstTimestampInStream = Global.NO_PTS;
-        long systemClockStartTime = 0;
-        int count = 0;
-        while(container.readNextPacket(packet) >= 0)
-        {
-      /*
-       * Now we have a packet, let's see if it belongs to our video stream
-       */
-            if (packet.getStreamIndex() == videoStreamId || packet.getStreamIndex() == audioStreamId)
-            {
-                int numBytes = packet.getSize();
-                byte[] buffer = packet.getData().getByteArray(0, numBytes);
-                //socketOutputStream.writeInt(numBytes);
-                //socketOutputStream.write(buffer, 0, numBytes); */
-                IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
-                IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
-                IPPortPair[] dests = new IPPortPair[1];
-                dests[0] = dest;
-
-                // somehow the streamindex is not preserved during data transmission, we record it in the SmartDataPacket
-                SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes, packet.getStreamIndex());
-                System.out.println("Packet " + count + " Size: " + numBytes + " Stream index " + packet.getStreamIndex() + " for " + dest.getIPAddress());
-                socketOutputStream.writeObject(dataPacket);
-                socketOutputStream.reset();
-                count++;
-            }
-            else
-            {
         /*
-         * This packet isn't part of our video stream, so we just
-         * silently drop it.
+         * Now, we start walking through the container looking at each packet.
          */
-                do {} while(false);
+            IPacket packet = IPacket.make();
+            long firstTimestampInStream = Global.NO_PTS;
+            long systemClockStartTime = 0;
+            int count = 0;
+            while(container.readNextPacket(packet) >= 0)
+            {
+          /*
+           * Now we have a packet, let's see if it belongs to our video stream
+           */
+                if (packet.getStreamIndex() == videoStreamId || packet.getStreamIndex() == audioStreamId)
+                {
+                    int numBytes = packet.getSize();
+                    byte[] buffer = packet.getData().getByteArray(0, numBytes);
+                    //socketOutputStream.writeInt(numBytes);
+                    //socketOutputStream.write(buffer, 0, numBytes); */
+                    IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
+                    IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
+                    IPPortPair[] dests = new IPPortPair[1];
+                    dests[0] = dest;
+
+                    // somehow the streamindex is not preserved during data transmission, we record it in the SmartDataPacket
+                    SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes, packet.getStreamIndex(), count);
+                    System.out.println("Packet " + count + " Size: " + numBytes + " Stream index " + packet.getStreamIndex() + " for " + dest.getIPAddress() + " " + dest.getPort());
+                    // Insert packet to the buffer to service later requests
+                    this.server.insertPacket(count, dataPacket);
+                    try {
+                        synchronized (this.server.syncObj) {
+                            socketOutputStream.writeObject(dataPacket);
+                            socketOutputStream.reset();
+                        }
+                    }
+                    catch (Exception e) {
+                        System.out.println("Failed to write to socket " + e.getMessage());
+                        break;
+                    }
+                    count++;
+                }
+                else
+                {
+            /*
+             * This packet isn't part of our video stream, so we just
+             * silently drop it.
+             */
+                    do {} while(false);
+                }
+
             }
 
+            //this.socketOutputStream.close();
+            // Insert a dummy packet to the buffer to mark the end of stream
+            System.out.println("****** Streaming finished, inserting dummy packet " + count);
+            SmartDataPacket dummyPacket = new SmartDataPacket(null, null, null, 0, 0, -1);
+            this.server.insertPacket(count, dummyPacket);
+        /*
+         * Technically since we're exiting anyway, these will be cleaned up by
+         * the garbage collector... but because we're nice people and want
+         * to be invited places for Christmas, we're going to show how to clean up.
+         */
+            if (videoCoder != null)
+            {
+                videoCoder.close();
+                videoCoder = null;
+            }
+            if (container !=null)
+            {
+                container.close();
+                container = null;
+            }
+            //closeJavaWindow();
         }
-    /*
-     * Technically since we're exiting anyway, these will be cleaned up by
-     * the garbage collector... but because we're nice people and want
-     * to be invited places for Christmas, we're going to show how to clean up.
-     */
-        if (videoCoder != null)
-        {
-            videoCoder.close();
-            videoCoder = null;
+        else {
+            // packet buffer is being filled (or already have been filled)
+            System.out.println("Fetching packets from buffer");
+            int count = 0;
+            do {
+                SmartDataPacket packet = this.server.getPacket(count);
+                if (packet != null) {
+                    if (packet.getOffset() < 0) {
+                        // dummy packet
+                        System.out.println("Dummy packet encountered. Streaming finished.");
+                        break;
+                    }
+                    IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
+                    IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
+                    IPPortPair[] dests = new IPPortPair[1];
+                    dests[0] = dest;
+                    packet.setDestinations(dests);
+                    System.out.println("Packet " + packet.getOffset() + " size " + packet.getLength() + " fetched for " + dest.getIPAddress() + " " + dest.getPort());
+                    try {
+                        synchronized (this.server.syncObj) {
+                            socketOutputStream.writeObject(packet);
+                            socketOutputStream.reset();
+                        }
+                        count++;
+                    }
+                    catch (Exception e) {
+                        System.out.println("Failed to write to socket " + e.getMessage());
+                        e.printStackTrace();
+                        break;
+                    }
+                }
+                else {
+                    try {
+                        sleep(20);
+                    }
+                    catch (Exception e) {
+                        System.out.println("Thread sleep error " + e.getMessage());
+                        break;
+                    }
+                }
+            }
+            while (true);
+            //this.socketOutputStream.close();
+            if (container !=null)
+            {
+                container.close();
+                container = null;
+            }
         }
-        if (container !=null)
-        {
-            container.close();
-            container = null;
-        }
-        //closeJavaWindow();
 
     }
 

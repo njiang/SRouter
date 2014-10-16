@@ -81,9 +81,10 @@ class VideoServerConnectionManager extends Thread
                        ObjectOutputStream vsos = new ObjectOutputStream(videoServerSocket.getOutputStream());
                        vsis = new ObjectInputStream(videoServerSocket.getInputStream());
                        smartRouter.setVideoServerInfo(this.serverIP, videoServerSocket, vsos, vsis);
+                       System.out.println("Successfully connected to video server " + this.serverIP);
                    }
                    catch (Exception e) {
-                       System.out.println("Failed to connect to video server " + this.serverIP + ": " + e.getMessage());
+                       //System.out.println("Failed to connect to video server " + this.serverIP + ": " + e.getMessage());
                    }
                }
 

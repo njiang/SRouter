@@ -2,21 +2,28 @@ package com.SRouter;
 
 import com.xuggle.xuggler.IContainer;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentHashMap;
 
 class PacketHandler extends Thread {
+    SmartServer server;
     private TCPServer tcpServer;
     private Socket clientSocket;
     private String rootFilePath = ".\\";
 
-    public PacketHandler(Socket clientSocket, TCPServer tcpServer)
+    public PacketHandler(SmartServer server, Socket clientSocket, TCPServer tcpServer)
     {
+        this.server = server;
         this.tcpServer = tcpServer;
         this.clientSocket = clientSocket;
         this.rootFilePath = tcpServer.getRootFilePath();
     }
+
 
     public void run()
     {
@@ -41,8 +48,9 @@ class PacketHandler extends Thread {
                                 String[] splitted = command.split(" ");
                                 String filename = splitted[1];
 
-                                SmartFLVEncoder encoder = new SmartFLVEncoder(request, clientSocket, objos, this.rootFilePath + filename);
-                                encoder.startEncoding();
+                                // Encoder is running as a thread
+                                SmartFLVEncoder encoder = new SmartFLVEncoder(this.server, request, clientSocket, objos, this.rootFilePath + filename);
+                                encoder.start();
                             }
                         }
                     }
@@ -66,10 +74,12 @@ class TCPServer extends Thread
     private int myPort = 7999;
     private String[] neighboringRouters;
     private String rootFilePath = ".";
+    private SmartServer server;
 
-    public TCPServer(String rootFilePath, int port)
+    public TCPServer(SmartServer server, String rootFilePath, int port)
     {
         this.rootFilePath = rootFilePath;
+        this.server = server;
 
         if (port >= 0)
             myPort = port;
@@ -88,7 +98,7 @@ class TCPServer extends Thread
         while(true)
         {
             try {
-                new PacketHandler(serverSocket.accept(), this).start();
+                new PacketHandler(this.server, serverSocket.accept(), this).start();
             }
             catch (Exception e) {
                 System.out.println("Failed to accept connections " + e.getMessage());
@@ -107,6 +117,11 @@ public class SmartServer extends Thread {
     private TCPServer tcpServer;
     private int Server_Port = 7999;
     private String rootFilePath = "c:\\Temp\\";
+
+    // caches streamed packets to service other requests
+    private ConcurrentHashMap<Integer, SmartDataPacket> packetBuffer = new ConcurrentHashMap<Integer, SmartDataPacket>();
+    Object syncObj = new Object();  //used to synchronize writing to the objectoutputstream of the router
+
     public SmartServer(String[] args)
     {
        if (args.length > 0) {
@@ -133,8 +148,27 @@ public class SmartServer extends Thread {
                System.out.println("Failed to open configuration file " + e.getMessage());
            }
        }
-       tcpServer = new TCPServer(rootFilePath, Server_Port);
+       tcpServer = new TCPServer(this, rootFilePath, Server_Port);
        tcpServer.start();
+    }
+
+    public void insertPacket(int index, SmartDataPacket packet)
+    {
+        if (packet != null) {
+            Integer idx = new Integer(index);
+            this.packetBuffer.put(idx, packet);
+        }
+    }
+
+    public boolean isPacketBufferEmpty() { return this.packetBuffer.isEmpty(); }
+
+    public SmartDataPacket getPacket(int index)
+    {
+        Integer idx = new Integer(index);
+        if (this.packetBuffer.containsKey(idx)) {
+            return this.packetBuffer.get(idx);
+        }
+        return null;
     }
 
     public void run()

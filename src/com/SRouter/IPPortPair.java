@@ -5,7 +5,7 @@ import java.io.Serializable;
 /**
  * Created by Ning Jiang on 9/4/14.
  */
-public class IPPortPair implements Serializable {
+public class IPPortPair implements Serializable, Comparable<IPPortPair> {
     String IPAddress;
     int port;
 
@@ -31,5 +31,15 @@ public class IPPortPair implements Serializable {
     public int hashCode()
     {
         return IPAddress.hashCode() + port;
+    }
+
+    public int compareTo(IPPortPair target) {
+        if (this.equals(target))
+            return 0;
+
+        int result = this.IPAddress.compareTo(target.getIPAddress());
+        if (result == 0)
+            result = this.port - target.port;
+        return result;
     }
 }
