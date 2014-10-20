@@ -23,7 +23,6 @@ public class SmartFLVEncoder extends Thread
     ObjectOutputStream socketOutputStream = null;
     SmartRequest requestPacket;
     SmartServer server;
-    private int videoId = 0;
 
     /**
      * Takes a media container (file) as the first argument, opens it,
@@ -125,7 +124,7 @@ public class SmartFLVEncoder extends Thread
                     dests[0] = dest;
 
                     // somehow the streamindex is not preserved during data transmission, we record it in the SmartDataPacket
-                    SmartDataPacket dataPacket = new SmartDataPacket(this.videoId, src, dests, buffer, numBytes, packet.getStreamIndex(), count);
+                    SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes, packet.getStreamIndex(), count);
                     System.out.println("Packet " + count + " Size: " + numBytes + " Stream index " + packet.getStreamIndex() + " for " + dest.getIPAddress() + " " + dest.getPort());
                     // Insert packet to the buffer to service later requests
                     this.server.insertPacket(count, dataPacket);
@@ -155,23 +154,8 @@ public class SmartFLVEncoder extends Thread
             //this.socketOutputStream.close();
             // Insert a dummy packet to the buffer to mark the end of stream
             System.out.println("****** Streaming finished, inserting dummy packet " + count);
-            IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
-            IPPortPair[] dests = new IPPortPair[1];
-            dests[0] = dest;
-            IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
-            SmartDataPacket dummyPacket = new SmartDataPacket(this.videoId, src, dests, null, 0, 0, -1);
+            SmartDataPacket dummyPacket = new SmartDataPacket(null, null, null, 0, 0, -1);
             this.server.insertPacket(count, dummyPacket);
-
-            try {
-                synchronized (this.server.syncObj) {
-                    socketOutputStream.writeObject(dummyPacket);
-                    socketOutputStream.reset();
-                    System.out.println("Dummy packet sent!");
-                }
-            }
-            catch (Exception e) {
-                System.out.println("Failed to write to socket to send dummy packet " + e.getMessage());
-            }
         /*
          * Technically since we're exiting anyway, these will be cleaned up by
          * the garbage collector... but because we're nice people and want
@@ -199,21 +183,6 @@ public class SmartFLVEncoder extends Thread
                     if (packet.getOffset() < 0) {
                         // dummy packet
                         System.out.println("Dummy packet encountered. Streaming finished.");
-                        try {
-                            synchronized (this.server.syncObj) {
-                                IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
-                                IPPortPair[] dests = new IPPortPair[1];
-                                dests[0] = dest;
-                                packet.setDestinations(dests);
-                                socketOutputStream.writeObject(packet);
-                                socketOutputStream.reset();
-                                System.out.println("Dummy packet sent!");
-                            }
-                        }
-                        catch (Exception e) {
-                            System.out.println("Failed to write to socket to send dummy packet " + e.getMessage());
-                        }
-
                         break;
                     }
                     IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());

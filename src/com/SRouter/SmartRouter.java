@@ -150,8 +150,6 @@ public class SmartRouter extends Thread {
         if (args.length >= 1)
             routingModule = new NaiveRouting(myIP, args[0]);
 
-        this.smartBufferManager = new SmartBufferManager(this, routingModule.getBufferCapacity(), routingModule.getSmartEnabled());
-
         //neighborIPs = new String[1];
         //neighborIPs[0] = "**127.0.0.1"; // prefix ** means it's the video server
         ArrayList<String> neighborIPs = routingModule.getNeighboringRouters(myIP);
@@ -312,12 +310,7 @@ public class SmartRouter extends Thread {
                     // This is a video request
                     IPPortPair dest = request.getDestinationIPPorts().get(0);
                     System.out.println("Received request to server " + dest.getIPAddress());
-                    if (this.smartBufferManager.processRequest((SmartRequest)packet)) {
-                        // We already have this video buffered from the beginning, we therefore
-                        // don't need to forward the request to the video server
-                        System.out.println("Video already buffered!!!");
-                    }
-                    else if (this.videoServerConnected(dest.getIPAddress())) {
+                    if (this.videoServerConnected(dest.getIPAddress())) {
                         try {
                             ObjectOutputStream oos = this.videoServerOutputStreams.get(dest.getIPAddress());
                             if (oos != null)
@@ -341,12 +334,13 @@ public class SmartRouter extends Thread {
                 // forwarded to one of the connected client apps
                 clientFacingTCPServer.handleDataPacket((SmartDataPacket)packet);
 
+                // TODO
                 // process by Buffer manager
-                if (!this.smartBufferManager.processPacket((SmartDataPacket)packet)) {
-                    // For now forward to the next hop. Once the Buffer manager is implemented,
-                    // this should be commented out
-                    this.forwardPacket(packet);
-                }
+
+                // TODO
+                // For now forward to the next hop. Once the Buffer manager is implemented,
+                // this should be commented out
+                this.forwardPacket(packet);
             }
         }
         catch (Exception e) {
