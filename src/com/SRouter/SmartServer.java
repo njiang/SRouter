@@ -171,6 +171,8 @@ public class SmartServer extends Thread {
         return null;
     }
 
+    public void cleanPacketBuffer() { this.packetBuffer.clear(); }
+
     public void run()
     {
         while (true) {

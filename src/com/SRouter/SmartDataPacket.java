@@ -8,10 +8,12 @@ public class SmartDataPacket extends SmartPacket {
     private byte[] data;
     private int length;
     private int streamIndex;
+    private int videoId;
 
-    public SmartDataPacket(IPPortPair srcAddr, IPPortPair[] destinationAddrs, byte[] data, int length, int sindex, int offset)
+    public SmartDataPacket(int videoId, IPPortPair srcAddr, IPPortPair[] destinationAddrs, byte[] data, int length, int sindex, int offset)
     {
         super(PacketType.DATA, srcAddr, destinationAddrs);
+        this.videoId = videoId;
         this.offset = offset;
         this.data = data;
         this.length = length;
@@ -23,4 +25,5 @@ public class SmartDataPacket extends SmartPacket {
     public byte[] getData() { return data; }
     public int getLength() { return length; }
     public int getStreamIndex() { return streamIndex; }
+    public int getVideoId() { return this.videoId; }
 }

@@ -23,6 +23,7 @@ public class SmartFLVEncoder extends Thread
     ObjectOutputStream socketOutputStream = null;
     SmartRequest requestPacket;
     SmartServer server;
+    private int videoId = 0;
 
     /**
      * Takes a media container (file) as the first argument, opens it,
@@ -124,19 +125,19 @@ public class SmartFLVEncoder extends Thread
                     dests[0] = dest;
 
                     // somehow the streamindex is not preserved during data transmission, we record it in the SmartDataPacket
-                    SmartDataPacket dataPacket = new SmartDataPacket(src, dests, buffer, numBytes, packet.getStreamIndex(), count);
+                    SmartDataPacket dataPacket = new SmartDataPacket(this.videoId, src, dests, buffer, numBytes, packet.getStreamIndex(), count);
                     System.out.println("Packet " + count + " Size: " + numBytes + " Stream index " + packet.getStreamIndex() + " for " + dest.getIPAddress() + " " + dest.getPort());
                     // Insert packet to the buffer to service later requests
-                    this.server.insertPacket(count, dataPacket);
                     try {
                         synchronized (this.server.syncObj) {
+                            this.server.insertPacket(count, dataPacket);
                             socketOutputStream.writeObject(dataPacket);
                             socketOutputStream.reset();
                         }
                     }
                     catch (Exception e) {
-                        System.out.println("Failed to write to socket " + e.getMessage());
-                        break;
+                        System.out.println("Failed to write to socket " + dataPacket.getOffset() + " " + e.getMessage());
+                        e.printStackTrace();
                     }
                     count++;
                 }
@@ -154,8 +155,23 @@ public class SmartFLVEncoder extends Thread
             //this.socketOutputStream.close();
             // Insert a dummy packet to the buffer to mark the end of stream
             System.out.println("****** Streaming finished, inserting dummy packet " + count);
-            SmartDataPacket dummyPacket = new SmartDataPacket(null, null, null, 0, 0, -1);
-            this.server.insertPacket(count, dummyPacket);
+            IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
+            IPPortPair[] dests = new IPPortPair[1];
+            dests[0] = dest;
+            IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
+            SmartDataPacket dummyPacket = new SmartDataPacket(this.videoId, src, dests, null, 0, 0, -1);
+
+            try {
+                synchronized (this.server.syncObj) {
+                    this.server.insertPacket(count, dummyPacket);
+                    socketOutputStream.writeObject(dummyPacket);
+                    socketOutputStream.reset();
+                    System.out.println("Dummy packet sent!");
+                }
+            }
+            catch (Exception e) {
+                System.out.println("Failed to write to socket to send dummy packet " + e.getMessage());
+            }
         /*
          * Technically since we're exiting anyway, these will be cleaned up by
          * the garbage collector... but because we're nice people and want
@@ -178,30 +194,47 @@ public class SmartFLVEncoder extends Thread
             System.out.println("Fetching packets from buffer");
             int count = 0;
             do {
-                SmartDataPacket packet = this.server.getPacket(count);
+                SmartDataPacket packet = null;
+                synchronized (this.server.syncObj) {
+                    packet = this.server.getPacket(count);
+                }
                 if (packet != null) {
-                    if (packet.getOffset() < 0) {
-                        // dummy packet
-                        System.out.println("Dummy packet encountered. Streaming finished.");
-                        break;
-                    }
-                    IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
-                    IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
-                    IPPortPair[] dests = new IPPortPair[1];
-                    dests[0] = dest;
-                    packet.setDestinations(dests);
-                    System.out.println("Packet " + packet.getOffset() + " size " + packet.getLength() + " fetched for " + dest.getIPAddress() + " " + dest.getPort());
-                    try {
-                        synchronized (this.server.syncObj) {
-                            socketOutputStream.writeObject(packet);
-                            socketOutputStream.reset();
+                    count++;
+                    synchronized (this.server.syncObj) {
+                        if (packet.getOffset() < 0) {
+                            // dummy packet
+                            System.out.println("Dummy packet encountered. Streaming finished.");
+                            try {
+                                IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
+                                IPPortPair[] dests = new IPPortPair[1];
+                                dests[0] = dest;
+                                packet.setDestinations(dests);
+                                socketOutputStream.writeObject(packet);
+                                socketOutputStream.reset();
+                                System.out.println("Dummy packet sent!");
+
+                            }
+                            catch (Exception e) {
+                                System.out.println("Failed to write to socket to send dummy packet " + e.getMessage());
+                            }
+
+                            break;
                         }
-                        count++;
-                    }
-                    catch (Exception e) {
-                        System.out.println("Failed to write to socket " + e.getMessage());
-                        e.printStackTrace();
-                        break;
+                        IPPortPair src = new IPPortPair(this.clientSocket.getLocalAddress().getHostAddress(), this.clientSocket.getLocalPort());
+                        IPPortPair dest = requestPacket.getSourceIPPort();  // <==== dest is the IP, port pair of the client app
+                        IPPortPair[] dests = new IPPortPair[1];
+                        dests[0] = dest;
+                        packet.setDestinations(dests);
+                        System.out.println("Packet " + packet.getOffset() + " size " + packet.getLength() + " fetched for " + dest.getIPAddress() + " " + dest.getPort());
+                        try {
+                             socketOutputStream.writeObject(packet);
+                             socketOutputStream.reset();
+                        }
+                        catch (Exception e) {
+                            System.out.println("Failed to write to socket " + e.getMessage());
+                            e.printStackTrace();
+                            break;
+                        }
                     }
                 }
                 else {
