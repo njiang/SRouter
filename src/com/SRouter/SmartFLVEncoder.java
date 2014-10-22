@@ -229,15 +229,22 @@ public class SmartFLVEncoder extends Thread
                         try {
                              socketOutputStream.writeObject(packet);
                              socketOutputStream.reset();
-
-                             if ((count % 30 == 0))
-                             {
-                                 sleep(30);
-                             }
                         }
                         catch (Exception e) {
                             System.out.println("Failed to write to socket " + e.getMessage());
                             e.printStackTrace();
+                            break;
+                        }
+                    }
+
+                    // Sleep for other threads to have a chance to send data
+                    if ((count % 30) == 0)
+                    {
+                        try {
+                            sleep(20);
+                        }
+                        catch (Exception e) {
+                            System.out.println("Error thread sleeping");
                             break;
                         }
                     }

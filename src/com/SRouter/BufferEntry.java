@@ -40,7 +40,9 @@ public class BufferEntry {
     public BufferEntry(SmartBufferManager manager, int packetBufferSize)
     {
         this.manager = manager;
-        packetBuffer = new HashMap<Integer, SmartDataPacket>(packetBufferSize);
+        // TODO
+        // We need to allocate buffer for edge routers to order packets
+        //packetBuffer = new HashMap<Integer, SmartDataPacket>(packetBufferSize);
         this.packetBufferSize = packetBufferSize;
     }
 
@@ -93,129 +95,105 @@ public class BufferEntry {
                 System.out.println("Dummy packet received!!!!!");
                 this.dummyPacketReceived = true;
             }
-            //synchronized (syncObj)
-            {
-                /*if (dests.size() == 1) {
-                    System.out.println("*********** Handling packet offset: " + ioffset + " for ");
-                    for (int i = 0; i < dests.size(); i++) {
-                        System.out.println(dests.get(i).getIPAddress() + " " + dests.get(i).getPort());
-                    }
-                } */
 
-                ArrayList<IPPortPair> toBeSent = new ArrayList<IPPortPair>(dests);
-                if (isDummyPacket) {
-                   // We need to clean up the latestPacketList
-                   for (int i = 0; i < dests.size(); i++) {
-                       /*IPPortPair dest = dests.get(0);
-                       if (!mergePoints.containsKey(dest)) {
-                           System.out.println(dest.getIPAddress() + " " + dest.getPort() + " removed for dummy packet");
-                           latestPacketList.remove(dest);
-                       }
-                       else {
-                           int latestsent = latestPacketList.get(dest).intValue();
-                           int mergepoint = mergePoints.get(dest).intValue();
-                           if (latestsent >= mergepoint) {
-                               // We already merged
-                               System.out.println(dest.getIPAddress() + " " + dest.getPort() + " lastest sent "
-                                       + latestsent + " merge point " + mergepoint + " remove from lists");
-                               latestPacketList.remove(dest);
-                               mergePoints.remove(dest);
-                           }
-                       } */
-                       this.latestPacketList.remove(dests.get(0));
-                       this.mergePoints.remove(dests.get(0));
-                   }
-                }
-                else {
-                    for (int i  = 0; i < dests.size(); i++) {
-                        IPPortPair dest = dests.get(i);
-                        // Record the latest packet offset for that dest
-                        if (!this.latestPacketList.containsKey(dest) && ioffset == 0)
-                            this.latestPacketList.put(dest, 0);
-                        else if (this.latestPacketList.containsKey(dest)) {
-                            if (this.mergePoints.containsKey(dest)
-                                && ioffset >= this.mergePoints.get(dest).intValue())
-                            {
-                                // We do not modify latest packet count if the packet is beyond
-                                // the merge point.  This is to prevent cyclic merging since sometimes
-                                // the mergee's packets might go faster then the source. And we just
-                                // ignore this dest
-                                toBeSent.remove(dest);
-                            }
-                            else if (ioffset == this.latestPacketList.get(dest).intValue() + 1)
-                                this.latestPacketList.put(dest, ioffset);
-                            else {
-                                // This could because the router receives a merged packet
-                                // before it receives the packets before the merge point
-                                // so it is fine.
-
-                                //System.out.println("Out of order packet " + ioffset
-                                //        + " for " + dest.getIPAddress() + " " + dest.getPort()
-                                //        + " latest value " + this.latestPacketList.get(dest).intValue());
-                            }
-                        }
-                        else {
-                            // this is an out of order packet
-                            System.out.println("Received out of order packet " + ioffset
-                                    + " for " + dest.getIPAddress() + " " + dest.getPort());
-                        }
-                    }
-
-                    // If this packet has no destinations to send, we ignore it
-                    if (toBeSent.size() == 0)
-                        return true;
-
-                    ArrayList<IPPortPair> cloned = new ArrayList<IPPortPair>(toBeSent);
-                    for (int i = 0; i < cloned.size(); i++)
-                    {
-                        IPPortPair dest = cloned.get(i);
-                        if (mergePoints.containsKey(dest) && ioffset >= mergePoints.get(dest).intValue()) {
-                            // We already hit the merge point, we can stop sending
-                            if (ioffset == mergePoints.get(dest).intValue())
-                                System.out.println("^^^^Removing " + dest.getIPAddress() + " " + dest.getPort() + " at " + ioffset
-                                    + " for merging redundancy");
+            ArrayList<IPPortPair> toBeSent = new ArrayList<IPPortPair>(dests);
+            if (isDummyPacket) {
+               // We need to clean up the latestPacketList
+               for (int i = 0; i < dests.size(); i++) {
+                   // Clean up the tables for the client of the dummy packet
+                   this.latestPacketList.remove(dests.get(0));
+                   this.mergePoints.remove(dests.get(0));
+               }
+            }
+            else {
+                for (int i  = 0; i < dests.size(); i++) {
+                    IPPortPair dest = dests.get(i);
+                    // Record the latest packet offset for that dest
+                    if (!this.latestPacketList.containsKey(dest) && ioffset == 0)
+                        this.latestPacketList.put(dest, 0);
+                    else if (this.latestPacketList.containsKey(dest)) {
+                        if (this.mergePoints.containsKey(dest)
+                            && ioffset >= this.mergePoints.get(dest).intValue())
+                        {
+                            // We do not modify latest packet count if the packet is beyond
+                            // the merge point.  This is to prevent cyclic merging since sometimes
+                            // the mergee's packets might go faster then the source. And we just
+                            // ignore this dest
                             toBeSent.remove(dest);
                         }
-                    }
-
-                    for (IPPortPair key : this.latestPacketList.keySet()) {
-                        int latestsent = this.latestPacketList.get(key).intValue();
-                        if (!toBeSent.contains(key)) {
-                            if (latestsent < ioffset) {
-                                // We can merge with key
-                                //System.out.println("Add recipient for merging" + key.getIPAddress()
-                                //        + " " + key.getPort() + " at " + ioffset);
-                                if (updateMergePoint(key, dests, offset))
-                                    toBeSent.add(key);
-                            }
-                        }
+                        else if (ioffset == this.latestPacketList.get(dest).intValue() + 1)
+                            this.latestPacketList.put(dest, ioffset);
                         else {
-                            if (ioffset > latestsent) {
-                                // we can merge with key
-                                //System.out.println("Recipient " + key.getIPAddress() + " " + key.getPort() + " already merged.");
-                                updateMergePoint(key, dests, offset);
-                            }
+                            // This could because the router receives a merged packet
+                            // before it receives the packets prior to the merge point
+                            // so it is fine.
+
+                            //System.out.println("Out of order packet " + ioffset
+                            //        + " for " + dest.getIPAddress() + " " + dest.getPort()
+                            //        + " latest value " + this.latestPacketList.get(dest).intValue());
                         }
                     }
-
-                }
-
-                if (toBeSent.size() == 0) {
-                    /*System.out.println("Packet " + ioffset + " ignored for ");
-                    for (int i = 0; i < dests.size(); i++) {
-                        System.out.println(dests.get(i).getIPAddress() + " " + dests.get(i).getPort());
-                    } */
-                    return true;
-                }
-                /*if (toBeSent.size() > dests.size()) {
-                    System.out.println("Packet " + ioffset + " merged ");
-                    for (int i = 0; i < toBeSent.size(); i++) {
-                        System.out.println(toBeSent.get(i).getIPAddress() + " " + toBeSent.get(i).getPort());
+                    else {
+                        // this is an out of order packet
+                        System.out.println("Received out of order packet " + ioffset
+                                + " for " + dest.getIPAddress() + " " + dest.getPort());
                     }
-                } */
-                packet.setDestinations(toBeSent);
-                return false;
+                }
+
+                // If this packet has no destinations to send, we ignore it
+                if (toBeSent.size() == 0)
+                    return true;
+
+                ArrayList<IPPortPair> cloned = new ArrayList<IPPortPair>(toBeSent);
+                for (int i = 0; i < cloned.size(); i++)
+                {
+                    IPPortPair dest = cloned.get(i);
+                    if (mergePoints.containsKey(dest) && ioffset >= mergePoints.get(dest).intValue()) {
+                        // We already hit the merge point, we can stop sending
+                        if (ioffset == mergePoints.get(dest).intValue())
+                            System.out.println("^^^^Removing " + dest.getIPAddress() + " " + dest.getPort() + " at " + ioffset
+                                + " for merging redundancy");
+                        toBeSent.remove(dest);
+                    }
+                }
+
+                for (IPPortPair key : this.latestPacketList.keySet()) {
+                    int latestsent = this.latestPacketList.get(key).intValue();
+                    if (!toBeSent.contains(key)) {
+                        if (latestsent < ioffset) {
+                            // We can merge with key
+                            //System.out.println("Add recipient for merging" + key.getIPAddress()
+                            //        + " " + key.getPort() + " at " + ioffset);
+                            if (updateMergePoint(key, dests, offset))
+                                toBeSent.add(key);
+                        }
+                    }
+                    else {
+                        if (ioffset > latestsent) {
+                            // we can merge with key
+                            //System.out.println("Recipient " + key.getIPAddress() + " " + key.getPort() + " already merged.");
+                            updateMergePoint(key, dests, offset);
+                        }
+                    }
+                }
+
             }
+
+            if (toBeSent.size() == 0) {
+                /*System.out.println("Packet " + ioffset + " ignored for ");
+                for (int i = 0; i < dests.size(); i++) {
+                    System.out.println(dests.get(i).getIPAddress() + " " + dests.get(i).getPort());
+                } */
+                return true;
+            }
+            /*if (toBeSent.size() > dests.size()) {
+                System.out.println("Packet " + ioffset + " merged ");
+                for (int i = 0; i < toBeSent.size(); i++) {
+                    System.out.println(toBeSent.get(i).getIPAddress() + " " + toBeSent.get(i).getPort());
+                }
+            } */
+            packet.setDestinations(toBeSent);
+            return false;
         }
         return true;
     }
