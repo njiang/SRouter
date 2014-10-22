@@ -134,6 +134,9 @@ public class SmartRouter extends Thread {
     private SmartBufferManager smartBufferManager;
     private NaiveRouting routingModule;
     private String myIP;
+    private int totalPacketsReceived = 0;
+    private int totalPacketsSavedBySMART = 0;
+    private int totalPacketsForwarded = 0;
     private boolean retryVideoServerSocket = false;
 
     public SmartRouter(String[] args)
@@ -149,6 +152,8 @@ public class SmartRouter extends Thread {
         // Read neighboring nodes from configuration file
         if (args.length >= 1)
             routingModule = new NaiveRouting(myIP, args[0]);
+
+        this.smartBufferManager = new SmartBufferManager(this, routingModule.getBufferCapacity(), routingModule.getSmartEnabled());
 
         //neighborIPs = new String[1];
         //neighborIPs[0] = "**127.0.0.1"; // prefix ** means it's the video server
@@ -187,6 +192,8 @@ public class SmartRouter extends Thread {
             e.printStackTrace();
         }
     }
+
+    public void increasePacketForwarded(int count) { this.totalPacketsForwarded += count; }
 
     public static String getMyIP()
     {
@@ -329,18 +336,26 @@ public class SmartRouter extends Thread {
             }
             else if (packet.getType() == PacketType.DATA) {
                 // This is a data packet from other routers
+                totalPacketsReceived++;
 
-                // First let the client facing server to decide whether the packet should be
-                // forwarded to one of the connected client apps
-                clientFacingTCPServer.handleDataPacket((SmartDataPacket)packet);
-
-                // TODO
                 // process by Buffer manager
+                if (!this.smartBufferManager.processPacket((SmartDataPacket)packet)) {
+                    // First let the client facing server to decide whether the packet should be
+                    // forwarded to one of the connected client apps
+                    clientFacingTCPServer.handleDataPacket((SmartDataPacket)packet);
+                    // Forward to neighboring routers
+                    this.forwardPacket(packet);
+                }
+                else
+                    this.totalPacketsSavedBySMART++;
 
-                // TODO
-                // For now forward to the next hop. Once the Buffer manager is implemented,
-                // this should be commented out
-                this.forwardPacket(packet);
+                if (((SmartDataPacket)packet).getOffset() < 0)
+                {
+                    System.out.println("============ Statistics ================");
+                    System.out.println("Total packets received so far: " + this.totalPacketsReceived);
+                    System.out.println("Total packets forwarded: " + this.totalPacketsForwarded);
+                    System.out.println("Total packets saved by SMART: " + this.totalPacketsSavedBySMART);
+                }
             }
         }
         catch (Exception e) {
@@ -361,7 +376,7 @@ public class SmartRouter extends Thread {
                 if (path != null && path.getPath().size() > 1)
                 {
                     String nextHop = path.getPath().get(1).getId();
-                    System.out.println("Next hop for " + dest.getIPAddress() + ": " + nextHop);
+                    //System.out.println("Next hop for " + dest.getIPAddress() + ": " + nextHop);
                     if (nextHop != null && nextHop.length() > 0) {
                         ArrayList<IPPortPair> decisionlist = null;
                         if (!routingDecision.containsKey(nextHop)) {
@@ -371,7 +386,7 @@ public class SmartRouter extends Thread {
                         else
                             decisionlist = routingDecision.get(nextHop);
                         decisionlist.add(dest);
-                        System.out.println("Next hop " + nextHop + " for <" + dest.getIPAddress() + ", " + dest.getPort() + ">");
+                        //System.out.println("Next hop " + nextHop + " for <" + dest.getIPAddress() + ", " + dest.getPort() + ">");
                     }
                 }
             }
@@ -381,12 +396,14 @@ public class SmartRouter extends Thread {
                 ArrayList<IPPortPair> dests = routingDecision.get(key);
                 packet.setDestinations(dests);
                 // forward to the next hop router
-                System.out.println("Forwarding to " + key);
+                //System.out.println("Forwarding to " + key);
                 if (neighborOutputStreams.containsKey(key)) {
                     ObjectOutputStream oos = neighborOutputStreams.get(key);
                     if (oos != null) {
                         try {
+                            this.totalPacketsForwarded++;
                             oos.writeObject(packet);
+                            oos.reset();
                         }
                         catch (Exception e) {
                             System.out.println("Failed to forward packet to " + key);

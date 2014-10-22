@@ -5,7 +5,7 @@ import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 class ClientPacketHandler extends Thread
@@ -27,9 +27,12 @@ class ClientPacketHandler extends Thread
             if (this.clientSocket != null) {
                 ObjectInputStream objis = new ObjectInputStream(this.clientSocket.getInputStream());
                 SmartPacket packet = SmartPacket.ReadPacket(objis);
-                if (packet == null)
+                if (packet == null) {
                     // something is wrong with the client, we remove it from the hashmap
+                    System.out.println("##### Client TCP Socket failed to read from " + this.clientIPPortPair.getIPAddress() + " "
+                            + this.clientIPPortPair.getPort());
                     this.tcpServer.removeClientSocket(this.clientIPPortPair);
+                }
                 else  {
                     // process the packet received from client apps
                     if (packet.getType() == PacketType.REQUEST) {
@@ -65,7 +68,7 @@ public class ClientFacingTCPServer extends Thread
 {
     ServerSocket serverSocket;
     SmartRouter smartRouter;
-    HashMap<IPPortPair, ObjectOutputStream> socketMap = new HashMap<IPPortPair, ObjectOutputStream>();
+    ConcurrentHashMap<IPPortPair, ObjectOutputStream> socketMap = new ConcurrentHashMap<IPPortPair, ObjectOutputStream>();
 
     public ClientFacingTCPServer(SmartRouter sr, int port)
     {
@@ -106,6 +109,14 @@ public class ClientFacingTCPServer extends Thread
         }
     }
 
+    public boolean isClient(IPPortPair dest) {
+        if (dest != null)
+        {
+            return this.socketMap.containsKey(dest);
+        }
+        return false;
+    }
+
     public void removeClientSocket(IPPortPair pair)
     {
         if (socketMap.containsKey(pair))
@@ -119,26 +130,42 @@ public class ClientFacingTCPServer extends Thread
     public void handleDataPacket(SmartDataPacket packet) {
         if (packet != null) {
             ArrayList<IPPortPair> dests = packet.getDestinationIPPorts();
+            ArrayList<IPPortPair> processed = new ArrayList<IPPortPair>();
             if (dests != null) {
                 for (int i = 0; i < dests.size(); i++) {
                     IPPortPair dest = dests.get(i);
-                    System.out.println("Client facing tcp server handling packet for " + dest.getIPAddress());
+                    //System.out.println("Client facing tcp server handling packet for " + dest.getIPAddress()
+                    //        + " " + dest.getPort());
                     if (socketMap.containsKey(dest)) {
-                        ObjectOutputStream objos = socketMap.get(dest);
-                        if (objos != null) {
-                            try {
-                                objos.writeObject(packet);
-                                //objos.reset();
-                                System.out.println("Forwarded packet to client app " + dest.getIPAddress() + " " + dest.getPort());
-                            }
-                            catch (Exception e) {
-                                System.out.println("Failed to process packet for " + dest.getIPAddress() + " " + dest.getPort() + " " + e.getMessage());
-                                e.printStackTrace();
-                                if (this.socketMap.containsKey(dest))
-                                    this.socketMap.remove(dest);
+                        processed.add(dest);
+                        if (packet.getOffset() >= 0) {
+                            // We do not forward dummy packets to clients
+                            ObjectOutputStream objos = socketMap.get(dest);
+                            if (objos != null) {
+                                try {
+                                    this.smartRouter.increasePacketForwarded(1);
+                                    objos.writeObject(packet);
+                                    objos.reset();
+                                    //System.out.println("Forwarded packet to client app " + dest.getIPAddress() + " " + dest.getPort());
+                                }
+                                catch (Exception e) {
+                                    System.out.println("Failed to process packet for " + dest.getIPAddress() + " " + dest.getPort() + " " + e.getMessage());
+                                    e.printStackTrace();
+                                    if (this.socketMap.containsKey(dest))
+                                        this.socketMap.remove(dest);
+                                }
                             }
                         }
                     }
+                    else {
+                        //System.out.println("====No socket exists for " + dest.getIPAddress() + " " + dest.getPort() + "=====");
+                    }
+                }
+
+                // Remove the destination addresses that have already been processed
+                for (int i = 0; i < processed.size(); i++) {
+                    IPPortPair dest = processed.get(i);
+                    dests.remove(dest);
                 }
             }
         }

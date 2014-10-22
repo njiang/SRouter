@@ -13,6 +13,11 @@ public class NaiveRouting implements ISmartRouting {
     RoutingTable routingTable;
     String myIP;
     Vertex self;
+    private int bufferCapacity = 500;
+    private boolean smartEnabled = false;
+
+    public int getBufferCapacity() { return this.bufferCapacity; }
+    public boolean getSmartEnabled() { return this.smartEnabled; }
 
     public NaiveRouting(String myIP, String configFile)
     {
@@ -27,6 +32,16 @@ public class NaiveRouting implements ISmartRouting {
                 String line = reader.readLine(); // source node
                 if (line == null)
                     break;
+
+                if (line.startsWith("capacity=")) {
+                    this.bufferCapacity = Integer.parseInt(line.substring(9));
+                    continue;
+                }
+                if (line.startsWith("smart=")) {
+                    String value = line.substring(6);
+                    this.smartEnabled = (value.equalsIgnoreCase("true")) ? true : false;
+                    continue;
+                }
 
                 Vertex src = new Vertex(line, line);
                 if (line.equals(myIP)) {
